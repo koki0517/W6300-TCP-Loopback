@@ -45,7 +45,6 @@
 /* #define HAL_DAC_MODULE_ENABLED   */
 /* #define HAL_DCMI_MODULE_ENABLED   */
 /* #define HAL_DMA2D_MODULE_ENABLED   */
-#define HAL_ETH_MODULE_ENABLED
 /* #define HAL_ETH_LEGACY_MODULE_ENABLED   */
 /* #define HAL_NAND_MODULE_ENABLED   */
 /* #define HAL_NOR_MODULE_ENABLED   */
@@ -58,7 +57,7 @@
 /* #define HAL_GFXMMU_MODULE_ENABLED   */
 /* #define HAL_JPEG_MODULE_ENABLED   */
 /* #define HAL_OPAMP_MODULE_ENABLED   */
-/* #define HAL_OSPI_MODULE_ENABLED   */
+#define HAL_OSPI_MODULE_ENABLED
 /* #define HAL_XSPI_MODULE_ENABLED   */
 /* #define HAL_I2S_MODULE_ENABLED   */
 /* #define HAL_SMBUS_MODULE_ENABLED   */
@@ -219,17 +218,6 @@
 #define  USE_HAL_UART_REGISTER_CALLBACKS    0U /* UART register callback disabled    */
 #define  USE_HAL_USART_REGISTER_CALLBACKS   0U /* USART register callback disabled   */
 #define  USE_HAL_WWDG_REGISTER_CALLBACKS    0U /* WWDG register callback disabled    */
-
-/* ########################### Ethernet Configuration ######################### */
-#define ETH_TX_DESC_CNT         4U  /* number of Ethernet Tx DMA descriptors */
-#define ETH_RX_DESC_CNT         4U  /* number of Ethernet Rx DMA descriptors */
-
-#define ETH_MAC_ADDR0    (0x02UL)
-#define ETH_MAC_ADDR1    (0x00UL)
-#define ETH_MAC_ADDR2    (0x00UL)
-#define ETH_MAC_ADDR3    (0x00UL)
-#define ETH_MAC_ADDR4    (0x00UL)
-#define ETH_MAC_ADDR5    (0x00UL)
 
 /* ########################## Assert Selection ############################## */
 /**
