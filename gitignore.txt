@@ -1,0 +1,14 @@
+.metadata
+.vscode
+*.lck
+*.kicad_prl
+*-backups
+.settings
+Debug
+Drivers
+.DS_Store
+DataSheets/.DS_Store
+ExternalLib/.DS_Store
+Firmware/.DS_Store
+KicadProject/.DS_Store
+KicadProject/BLMD_2026/.DS_Store
