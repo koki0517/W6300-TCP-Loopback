@@ -14,8 +14,18 @@
 #define APP_TCP_SOCKET           0U
 #define APP_LOOPBACK_BUFFER_SIZE 2048U
 
-/* Set to 1 only to run the isolated Quad register diagnostic. */
+/* Set to 1 to compare Single, Dual, and Quad register reads without networking. */
 #define APP_QSPI_DIAGNOSTIC_ONLY 0U
+
+/* Set to 1 to exercise TX-buffer read/write payloads in the QSPI diagnostic. */
+#define APP_QSPI_BUFFER_DIAGNOSTIC 0U
+
+/* Set to 1 to match the Golden Reference ioLibrary critical callbacks. */
+#define W6300_GOLDEN_CRITICAL_CALLBACKS 0U
+
+/* Use HAL_OSPI_CLOCK_MODE_0 for the WIZnet Golden Reference timing comparison. */
+#define W6300_OSPI_CLOCK_MODE HAL_OSPI_CLOCK_MODE_0
+#define W6300_OSPI_SAMPLE_SHIFTING HAL_OSPI_SAMPLE_SHIFTING_NONE
 
 #define W6300_RESET_LOW_MS       100U
 #define W6300_RESET_SETTLE_MS    100U
@@ -23,6 +33,7 @@
 #define W6300_OSPI_KERNEL_CLOCK_HZ 76000000UL
 #define W6300_OSPI_PRESCALER     79U
 #define W6300_QSPI_DUMMY_CYCLES  2U
+#define W6300_QSPI_DUAL_DUMMY_CYCLES 4U
 #define W6300_QSPI_SINGLE_DUMMY_CYCLES 8U
 #define W6300_EXPECTED_CIDR      0x6100U
 #define W6300_EXPECTED_VERSION    0x4661U

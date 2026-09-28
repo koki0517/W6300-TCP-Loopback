@@ -11,10 +11,10 @@
 The checked-in `.ioc` is the configuration source of truth. It targets CubeMX 6.12.0 and STM32CubeH7 FW 1.11.2. Keep this package version when regenerating the project.
 
 - MCU: STM32H723ZGTx; preserve the existing 8 MHz HSE bypass and 550 MHz system clock.
-- OCTOSPI1: Port 1 Quad, Clock Mode 3, STR, DTR/DQS/free-running clock disabled, blocking polling, no DMA/MDMA or OCTOSPI interrupt.
+- OCTOSPI1: Port 1 Quad, Clock Mode 0, STR, DTR/DQS/free-running clock disabled, blocking polling, no DMA/MDMA or OCTOSPI interrupt.
 - OCTOSPI kernel: PLL2R at 76 MHz, derived from the existing 8 MHz HSE / PLL2 plan (`M=1`, `N=19`, `R=2`). HAL stores `ClockPrescaler - 1` in DCR2, so the divider is the configured HAL value; prescaler 79 gives about 0.962 MHz SCLK (`76 MHz / 79`) to match the reference branch's roughly 0.96 MHz clock.
-- Pins: PB2 CLK, PG6 hardware NCS, PD11 IO0, PD12 IO1, PF7 IO2, PD13 IO3. QD2 goes to CN9-26/PF7. PE2 is unused and SB67 remains unchanged.
-- Sampling: no extra half-cycle shift. This matches the reference branch's default sample timing; the board-level Quad read remains under diagnostic until identity reads pass.
+- Pins: PB2 CLK, PG6 hardware NCS, PD11 IO0, PD12 IO1, PF7 IO2, PD13 IO3. The current physical QD2 wire is WIZ630io J3-3 to PF7 / CN9-26 / D62. PF7 uses OCTOSPIM Port 1 IO2 in the LOW group. SB67 is outside this external PF7 path; the user confirmed its chip resistor was removed. Earlier PE2 wiring and test results are recorded as history below and in [UBUNTU_TEST.md](UBUNTU_TEST.md).
+- Sampling: no extra half-cycle shift. This matches the Golden Reference's sample timing. Quad identity reads now pass on PF7, while Quad payload reads and TCP data integrity remain under diagnosis.
 - USART3: PD8/PD9, 115200 baud, 8-N-1, ST-LINK VCP.
 - PF4: active-low `W6300_RSTn`, GPIO output, idle high.
 - STM32 internal ETH/RMII, USB_OTG_HS and its GPIO, LwIP, and RTOS are disabled.
@@ -38,7 +38,7 @@ The application buffer is 2048 bytes. TCP remains a byte stream: vendor loopback
 
 ## Configuration and source tree
 
-Change MAC, IPv4 address, subnet, gateway, DNS, TCP port, socket number, buffer size, reset delays, clock divider, and dummy cycles in `App/Inc/app_config.h`. Defaults are:
+Change MAC, IPv4 address, subnet, gateway, DNS, TCP port, socket number, buffer size, reset delays, clock divider, dummy cycles, and diagnostic callback selection in `App/Inc/app_config.h`. `W6300_GOLDEN_CRITICAL_CALLBACKS=1U` matches the Golden Reference IRQ-masking callbacks for comparisons; the normal firmware leaves it at `0U` so HAL polling timeouts keep using SysTick. Defaults are:
 
 - MAC `02:00:00:00:00:10`
 - IPv4 `192.168.0.10/24`
@@ -51,7 +51,7 @@ Core/                              CubeMX startup and peripheral code
 Drivers/                           STM32CubeH7 HAL and CMSIS
 Middlewares/Third_Party/ioLibrary_Driver/  Pinned WIZnet submodule
 tools/tcp_loopback_test.py         Windows standard-library test client
-docs/                              Hardware, firmware, and Windows setup
+docs/                              Hardware, firmware, Windows, and Ubuntu setup
 W6300-TCP-Loopback.ioc              CubeMX source of truth
 ```
 
@@ -79,12 +79,16 @@ Open the ST-LINK VCP at 115200 baud, 8 data bits, no parity, one stop bit, no fl
 
 - CubeIDE 1.16.0 Debug clean builds completed with 0 compiler/linker errors. The latest build reports 14 warnings from the unmodified vendor `Application/loopback/loopback.c`; the application and HAL port have no warnings.
 - CubeProgrammer 2.17.0 detected the connected NUCLEO-H723ZG (STM32H72x, Device ID `0x483`, ST-LINK SN `002E00343532511131333430`), programmed and verified the ELF, and reset the MCU. USART3 ST-LINK VCP is COM4 at 115200 8-N-1.
-- The current wiring is QD2=PF7 on CN9-26; PE2 is unused. Live GPIO AF registers were correct (PF7 AF10, PD11–PD13 AF9, PB2 AF9, PG6 AF10). Live OCTOSPI registers showed one-line instruction, four-line address/data, 16-bit address, two dummy cycles, and the requested clock mode.
-- Quad CIDR diagnostic failed in every tested configuration: Mode 3 at 4.75 MHz and about 1 MHz, Mode 0 at about 1 MHz, with both half-cycle and no sample shift. The reference branch timing was also matched at Mode 0, no sample shift, 0.962 MHz; CIDR was `0x00` on all 100 reads, VER/SYSR were zero, and HAL OSPI errors were zero. The opcode was `0x80` as expected. Thus HAL accepted the transactions, but the Quad response did not contain valid register data.
-- In the same Mode 0 / 0.962 MHz startup, Quad identity failed and the application's Single 1-1-1 fallback read raw CIDR `0x61` (normalized `0x6100`), API CIDR `0x6300`, RTL `0x11`, VER `0x4661`, and SYSR `0x01`; HAL errors stayed zero. It configured MAC `02:00:00:00:00:10`, IPv4 `192.168.0.10/24`, PHY link UP, and TCP LISTEN on port 5000.
+- Historical PE2 reroute test: at that stage the physical QD2 wire was PE2 / CN10-25 / D31 and the project/HAL MSP configured PE2 AF10. SWD readback showed GPIOE_MODER=`0xFFFFFFE7`, OSPEEDR=`0x00000030`, PUPDR=`0`, AFRL=`0x00000A00`, and PF7 unassigned. P1CR=`0x02010101` selected Port 1 LOW. The user confirmed SB67's resistor was removed. This configuration was later replaced by the current PF7 wiring; it is not the current pin assignment.
+- The earlier Windows Quad attempts used PF7 for IO2 while the physical QD2 wire was on PE2. Those Mode 3/Mode 0 and sample-shift comparisons, including the reference-timing 0.962 MHz run, are historical results from a mismatched IO2 pin configuration and do not establish Quad failure on the correct route. See the PE2-corrected Ubuntu diagnostic and the SB67 route condition in [UBUNTU_TEST.md](UBUNTU_TEST.md).
+- In the earlier Mode 0 / 0.962 MHz Windows startup, Quad identity failed and the application's Single 1-1-1 fallback read raw CIDR `0x61` (normalized `0x6100`), API CIDR `0x6300`, RTL `0x11`, VER `0x4661`, and SYSR `0x01`; HAL errors stayed zero. This Single result remains valid because Single does not use IO2. It configured MAC `02:00:00:00:00:10`, IPv4 `192.168.0.10/24`, PHY link UP, and TCP LISTEN on port 5000.
 - Windows showed the ASIX adapter Up at 100 Mbps with `192.168.0.20/24`; ARP resolved `192.168.0.10` to `02-00-00-00-00-10`. Ping succeeded 3/3 and `Test-NetConnection` returned `TcpTestSucceeded=True` when run outside the sandbox.
 - With the final Mode 3 firmware, the repository Python client passed sizes 1, 64, 512, 1460, 2048, 4096, 16384, and 65536 bytes (90,101 payload bytes total) through the Single fallback. Under the branch-matched Mode 0 setup, it also passed 200 separate 64-byte connections with 0 mismatches and 0 disconnects. The Windows machine had no system Python 3 installed, so the standard-library script was invoked with the bundled Python runtime.
-- These results demonstrate working Single-mode QSPI, W6300 networking, Windows link, and TCP echo. They do not demonstrate Quad 1-4-4. With QD2 routed to PF7, SB67 is not on that signal path; software register configuration is correct, so the remaining Quad failure needs physical confirmation of IO0–IO3, CLK, and NCS at both ends. Do not attribute it to SB67 without a measurement.
+- The Windows results demonstrate working Single-mode QSPI, W6300 networking, Windows link, and TCP echo. The Ubuntu PE2-era identity diagnostics passed Single and Dual 100/100 while Quad remained 0/100 with HAL errors 0. Those results were superseded by the user's later physical move of QD2 to PF7, which made Quad identity pass but exposed payload-read corruption. Both stages, including the next signal measurement guidance, are recorded in [UBUNTU_TEST.md](UBUNTU_TEST.md).
+
+## Ubuntu 22.04 and Golden Reference follow-up
+
+The Ubuntu run compares this firmware against the known-working `Boards_2026/Firmware/UDP2CANFD` Golden Reference. Its transaction format and OCTOSPI settings are documented in [UBUNTU_TEST.md](UBUNTU_TEST.md). After moving QD2 from PE2 to PF7, live GPIO/OCTOSPIM readback confirmed PF7 AF10 and Port 1 LOW routing. Single, Dual, and Quad identity reads each passed 100/100 with zero HAL errors. A buffer diagnostic then isolated corruption to Quad read data: Quad write followed by Single read passed in the baseline callback build, while Single write followed by Quad read failed even byte-by-byte. The normal Quad firmware reaches PHY UP and TCP LISTEN, but a 64-byte TCP echo mismatches. The current software evidence points to the W6300-to-STM32 Quad receive data path or its physical IO signals; the next decisive test is a logic-analyzer capture at both ends of QD0-QD3 during a known-pattern Quad read. The full Golden comparison, register snapshot, UART results, and capture guidance are in [UBUNTU_TEST.md](UBUNTU_TEST.md).
 
 ## CubeMX regeneration and submodule updates
 

@@ -1,8 +1,8 @@
 # W6300 TCP Loopback
 
-NUCLEO-H723ZGとWIZ630io（W6300）をOCTOSPI1/QSPIで接続し、Windows PCから送信した任意のバイト列をそのまま返すTCP/IPv4サーバーです。STM32内蔵Ethernet、LwIP、FreeRTOS、DMAは使いません。
+NUCLEO-H723ZGとWIZ630io（W6300）をOCTOSPI1/QSPIで接続し、PCから送信した任意のバイト列を返すTCP/IPv4サーバーです。STM32内蔵Ethernet、LwIP、FreeRTOS、DMAは使いません。
 
-実機では、参照ブランチのQuad設定（Mode 0、約0.96 MHz）でCIDR読出しが失敗し、Single 1-1-1へfallbackするとTCP echoが動作しました。1〜65536 byteのbinary echoと64 byte×200接続は成功しています。要求仕様のQuad 1-4-4は未成立で、原因をソフト設定だけでは説明できず、IO0〜IO3の信号・配線確認が残っています。詳細は[ハードウェア](docs/HARDWARE.md)と[firmware検証記録](docs/FIRMWARE.md)を参照してください。
+Windows側ではSingle fallbackによるTCP echoが完全に成功しています。UbuntuでQD2をPF7へ配線し直した後は、Single/Dual/Quadのidentity readが各100/100で成功しました。一方、QuadのTX-buffer readでは8 byteからデータ不一致が起き、TCPでも接続後の64 byte payloadが不一致でした。現在はQuad read data pathを切り分けています。実配線、過去のPE2試験、UART・register・network結果は[ハードウェア手順](docs/HARDWARE.md)、[Ubuntu 22.04テスト](docs/UBUNTU_TEST.md)、[firmware検証記録](docs/FIRMWARE.md)に記録しています。
 
 ## 構成
 
@@ -16,7 +16,7 @@ Python TCP client   ── Ethernet ──>   OCTOSPI1/QSPI ── WIZ630io / W6
 ## 必要なもの
 
 - NUCLEO-H723ZG、WIZ630io、配線（[ハードウェア手順](docs/HARDWARE.md)）
-- STM32CubeIDE **1.16.0** とSTM32CubeH7 FW **1.11.2**
+- STM32CubeIDE 1.16.x（Windows 1.16.0、Ubuntu 1.16.1で検証）とSTM32CubeH7 FW **1.11.2**
 - Python 3（標準ライブラリだけを使います）
 - Git for Windows
 
@@ -41,10 +41,10 @@ Windows Ethernet adapterに`192.168.0.20`、サブネットマスク`255.255.255
 py -3 tools\tcp_loopback_test.py
 ```
 
-このテストは0x00を含むbinary payloadを使い、1 byteから64 KiBまでを送受信して完全一致を確認します。追加手順とトラブルシューティングは[Windowsテスト手順](docs/WINDOWS_TEST.md)にあります。
+このテストは0x00を含むbinary payloadを使い、1 byteから64 KiBまでを送受信して完全一致を確認します。Windows手順は[Windowsテスト](docs/WINDOWS_TEST.md)、Ubuntu 22.04でのbuild/flash/UART/Ethernet手順は[Ubuntuテスト](docs/UBUNTU_TEST.md)にあります。
 
 ## 設定とライセンス
 
-IP、MAC、TCP port、socket番号、loopback bufferは[`App/Inc/app_config.h`](App/Inc/app_config.h)で変更できます。配線（QD2=PF7、SB67変更なし）は[docs/HARDWARE.md](docs/HARDWARE.md)、設計とCubeMX再生成時の注意点は[docs/FIRMWARE.md](docs/FIRMWARE.md)を参照してください。
+IP、MAC、TCP port、socket番号、loopback bufferは[`App/Inc/app_config.h`](App/Inc/app_config.h)で変更できます。Windows手順は[docs/WINDOWS_TEST.md](docs/WINDOWS_TEST.md)、Ubuntu 22.04のbuild/flash/UART/Ethernet手順は[docs/UBUNTU_TEST.md](docs/UBUNTU_TEST.md)、現在の配線は[docs/HARDWARE.md](docs/HARDWARE.md)を参照してください。
 
 このリポジトリはCubeIDE projectとSTM32CubeH7 HAL/CMSISの既存ライセンスを保持します。WIZnet ioLibrary_Driverはpinned Git submoduleとして配布します。ライセンス概要は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を確認してください。

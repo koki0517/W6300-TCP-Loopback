@@ -24,6 +24,10 @@ static int32_t g_last_socket_error;
 
 static void log_network_info(const wiz_NetInfo *network);
 static bool check_qspi_errors(void);
+#if APP_QSPI_BUFFER_DIAGNOSTIC
+static bool check_qspi_quad_data_directions(void);
+static bool check_qspi_tx_buffer(void);
+#endif
 static bool check_chip_identity(uint8_t *cidr_major, uint16_t *cidr_api,
                                 uint16_t *version);
 static void poll_link_status(void);
@@ -31,68 +35,114 @@ static void log_socket_state(uint8_t state);
 
 bool w6300_app_run_qspi_diagnostic(void)
 {
+  static const W6300_QspiBusMode modes[] = {
+      W6300_QSPI_BUS_SINGLE,
+      W6300_QSPI_BUS_DUAL,
+      W6300_QSPI_BUS_QUAD,
+  };
   W6300_PortDiagnostics diagnostics = {0U, 0U, 0U, 0U};
-  uint16_t cidr_first = 0U;
-  uint16_t version_first = 0U;
-  uint16_t cidr_mismatches = 0U;
-  uint16_t version_mismatches = 0U;
-  uint16_t zero_count = 0U;
-  uint16_t ff_count = 0U;
-  uint16_t sample;
-  uint8_t cidr_major_first = 0U;
-  uint8_t system_status;
-  uint16_t index;
+  const uint8_t expected_cidr_major = (uint8_t)(W6300_EXPECTED_CIDR >> 8U);
+  bool all_modes_passed = true;
+  uint32_t mode_index;
 
   printf("\r\nW6300 QSPI register diagnostic start\r\n");
-  w6300_port_reset();
-  w6300_port_register_callbacks();
+  for (mode_index = 0U;
+       mode_index < (uint32_t)(sizeof(modes) / sizeof(modes[0]));
+       ++mode_index) {
+    uint16_t cidr_ok_count = 0U;
+    uint16_t version_ok_count = 0U;
+    uint16_t cidr_api;
+    uint16_t version_first = 0U;
+    uint16_t sample;
+    uint8_t cidr_major_first = 0U;
+    uint8_t rtl;
+    uint8_t system_status;
+    uint16_t index;
+    bool mode_passed;
 
-  for (index = 0U; index < W6300_QSPI_DIAG_READ_COUNT; ++index) {
-    sample = WIZCHIP_READ(_CIDR_);
-    if (index == 0U) {
-      cidr_major_first = (uint8_t)sample;
-      cidr_first = getCIDR();
+    w6300_port_set_qspi_mode(modes[mode_index]);
+    printf("\r\n=== %s ===\r\n", w6300_port_mode_name());
+    w6300_port_reset();
+    w6300_port_clear_diagnostics();
+    w6300_port_register_callbacks();
+
+    for (index = 0U; index < W6300_QSPI_DIAG_READ_COUNT; ++index) {
+      sample = WIZCHIP_READ(_CIDR_);
+      if (index == 0U) {
+        cidr_major_first = (uint8_t)sample;
+      }
+      if (sample == expected_cidr_major) {
+        ++cidr_ok_count;
+      }
     }
-    if (sample != (uint8_t)(W6300_EXPECTED_CIDR >> 8U)) {
-      ++cidr_mismatches;
+
+    cidr_api = getCIDR();
+    rtl = getRTL();
+    for (index = 0U; index < W6300_QSPI_DIAG_READ_COUNT; ++index) {
+      sample = getVER();
+      if (index == 0U) {
+        version_first = sample;
+      }
+      if (sample == W6300_EXPECTED_VERSION) {
+        ++version_ok_count;
+      }
     }
-    if (sample == 0U) {
-      ++zero_count;
+    system_status = getSYSR();
+    w6300_port_get_diagnostics(&diagnostics);
+
+    printf("CIDR: %u/%u OK raw-major=0x%02X normalized=0x%04X "
+           "API=0x%04X RTL=0x%02X\r\n",
+           cidr_ok_count, W6300_QSPI_DIAG_READ_COUNT, cidr_major_first,
+           (uint16_t)cidr_major_first << 8U, cidr_api, rtl);
+    printf("VER: %u/%u OK first=0x%04X expected=0x%04X "
+           "SYSR=0x%02X\r\n",
+           version_ok_count, W6300_QSPI_DIAG_READ_COUNT, version_first,
+           W6300_EXPECTED_VERSION, system_status);
+    printf("HAL status=%lu state=0x%02lX errors=%lu "
+           "ErrorCode=0x%08lX\r\n",
+           (unsigned long)diagnostics.last_hal_status,
+           (unsigned long)diagnostics.last_hal_state,
+           (unsigned long)diagnostics.hal_error_count,
+           (unsigned long)diagnostics.last_hal_error_code);
+
+    mode_passed = (cidr_ok_count == W6300_QSPI_DIAG_READ_COUNT) &&
+                  (version_ok_count == W6300_QSPI_DIAG_READ_COUNT) &&
+                  (diagnostics.hal_error_count == 0U);
+#if APP_QSPI_BUFFER_DIAGNOSTIC
+    if (mode_passed) {
+      int8_t init_result = wizchip_init(tx_buffer_sizes, rx_buffer_sizes);
+      if (init_result != 0) {
+        printf("[QSPI-BUFFER] %s wizchip_init failed: %d\r\n",
+               w6300_port_mode_name(), init_result);
+        mode_passed = false;
+      } else if (!check_qspi_tx_buffer()) {
+        mode_passed = false;
+      }
+      if ((modes[mode_index] == W6300_QSPI_BUS_QUAD) &&
+          !check_qspi_quad_data_directions()) {
+        mode_passed = false;
+      }
+      w6300_port_get_diagnostics(&diagnostics);
+      printf("[QSPI-BUFFER] %s HAL errors=%lu last status=%lu state=0x%02lX "
+             "ErrorCode=0x%08lX\r\n",
+             w6300_port_mode_name(),
+             (unsigned long)diagnostics.hal_error_count,
+             (unsigned long)diagnostics.last_hal_status,
+             (unsigned long)diagnostics.last_hal_state,
+             (unsigned long)diagnostics.last_hal_error_code);
+      if (diagnostics.hal_error_count != 0U) {
+        mode_passed = false;
+      }
     }
-    if (sample == 0x00FFU) {
-      ++ff_count;
+#endif
+    printf("[%s] identity diagnostic %s\r\n", w6300_port_mode_name(),
+           mode_passed ? "passed" : "failed");
+    if (!mode_passed) {
+      all_modes_passed = false;
     }
   }
 
-  version_first = getVER();
-  for (index = 1U; index < W6300_QSPI_DIAG_READ_COUNT; ++index) {
-    if (getVER() != version_first) {
-      ++version_mismatches;
-    }
-  }
-  system_status = getSYSR();
-  w6300_port_get_diagnostics(&diagnostics);
-
-  printf("[QSPI] CIDR major=0x%02X (normalized 0x%04X) reads=%u "
-         "expected=0x%02X mismatches=%u zero=%u ff=%u API=0x%04X RTL=0x%02X\r\n",
-         cidr_major_first, (uint16_t)cidr_major_first << 8U,
-         W6300_QSPI_DIAG_READ_COUNT,
-         (uint8_t)(W6300_EXPECTED_CIDR >> 8U), cidr_mismatches,
-         zero_count, ff_count, cidr_first, getRTL());
-  printf("[QSPI] VER first=0x%04X reads=%u mismatches=%u SYSR=0x%02X\r\n",
-         version_first, W6300_QSPI_DIAG_READ_COUNT, version_mismatches,
-         system_status);
-  printf("[QSPI] HAL OSPI errors=%lu last status=%lu state=0x%02lX "
-         "ErrorCode=0x%08lX\r\n",
-         (unsigned long)diagnostics.hal_error_count,
-         (unsigned long)diagnostics.last_hal_status,
-         (unsigned long)diagnostics.last_hal_state,
-         (unsigned long)diagnostics.last_hal_error_code);
-
-  return (cidr_major_first == (uint8_t)(W6300_EXPECTED_CIDR >> 8U)) &&
-         (cidr_mismatches == 0U) && (version_mismatches == 0U) &&
-         (version_first != 0U) && (version_first != 0xFFFFU) &&
-         (diagnostics.hal_error_count == 0U);
+  return all_modes_passed;
 }
 
 bool w6300_app_init(void)
@@ -233,6 +283,146 @@ static bool check_qspi_errors(void)
   w6300_port_get_diagnostics(&diagnostics);
   return diagnostics.hal_error_count == 0U;
 }
+
+#if APP_QSPI_BUFFER_DIAGNOSTIC
+static bool check_qspi_tx_buffer(void)
+{
+  static const uint16_t lengths[] = {
+      1U, 2U, 3U, 4U, 7U, 8U, 15U, 16U, 31U, 32U, 63U, 64U, 127U, 256U};
+  uint8_t expected[256];
+  uint8_t actual[256];
+  uint32_t length_index;
+
+  for (length_index = 0U;
+       length_index < (uint32_t)(sizeof(lengths) / sizeof(lengths[0]));
+       ++length_index) {
+    const uint16_t length = lengths[length_index];
+    const uint16_t address = (uint16_t)(0x0100U + length_index * 0x0100U);
+    const uint32_t addr_sel = ((uint32_t)address << 8U) |
+                              WIZCHIP_TXBUF_BLOCK(0U);
+    uint16_t index;
+
+    for (index = 0U; index < length; ++index) {
+      expected[index] = (uint8_t)(index * 37U + length * 11U +
+                                  length_index * 7U);
+    }
+    memset(actual, 0, length);
+    WIZCHIP_WRITE_BUF(addr_sel, expected, length);
+    WIZCHIP_READ_BUF(addr_sel, actual, length);
+    for (index = 0U; index < length; ++index) {
+      if (actual[index] != expected[index]) {
+        printf("[QSPI-BUFFER] %s FAIL len=%u offset=%u expected=0x%02X "
+               "actual=0x%02X\r\n",
+               w6300_port_mode_name(), (unsigned int)length,
+               (unsigned int)index, expected[index], actual[index]);
+        return false;
+      }
+    }
+    printf("[QSPI-BUFFER] %s PASS len=%u\r\n",
+           w6300_port_mode_name(), (unsigned int)length);
+  }
+
+  return true;
+}
+
+static bool check_qspi_quad_data_directions(void)
+{
+  static const uint8_t pattern[] = {
+      0x00U, 0xFFU, 0x55U, 0xAAU, 0x0FU, 0xF0U, 0x33U, 0xCCU,
+      0x11U, 0x22U, 0x44U, 0x88U, 0x7FU, 0xFEU, 0xA5U, 0x5AU};
+  uint8_t actual[sizeof(pattern)];
+  uint8_t chunked[sizeof(pattern)] = {0U};
+  uint8_t bytewise[sizeof(pattern)] = {0U};
+  const uint32_t addr_sel = (0x7000UL << 8U) | WIZCHIP_TXBUF_BLOCK(0U);
+  bool single_write_quad_read_passed = true;
+  bool quad_write_single_read_passed = true;
+  bool chunked_quad_read_passed = true;
+  bool bytewise_quad_read_passed = true;
+  uint16_t index;
+
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_SINGLE);
+  WIZCHIP_WRITE_BUF(addr_sel, (uint8_t *)pattern, sizeof(pattern));
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_QUAD);
+  memset(actual, 0, sizeof(actual));
+  WIZCHIP_READ_BUF(addr_sel, actual, sizeof(actual));
+  for (index = 0U; index < sizeof(pattern); ++index) {
+    if (actual[index] != pattern[index]) {
+      printf("[QSPI-DIRECTION] Single-write/Quad-read mismatch at %u: "
+             "expected=0x%02X actual=0x%02X\r\n",
+             (unsigned int)index, pattern[index], actual[index]);
+      single_write_quad_read_passed = false;
+    }
+  }
+  if (single_write_quad_read_passed) {
+    printf("[QSPI-DIRECTION] Single-write/Quad-read PASS (%u bytes)\r\n",
+           (unsigned int)sizeof(pattern));
+  }
+
+  index = 0U;
+  while (index < sizeof(pattern)) {
+    const uint16_t remaining = (uint16_t)(sizeof(pattern) - index);
+    const uint16_t chunk_length = (remaining > 7U) ? 7U : remaining;
+    const uint32_t chunk_addr = addr_sel + ((uint32_t)index << 8U);
+    WIZCHIP_READ_BUF(chunk_addr, &chunked[index], chunk_length);
+    index = (uint16_t)(index + chunk_length);
+  }
+  for (index = 0U; index < sizeof(pattern); ++index) {
+    if (chunked[index] != pattern[index]) {
+      if (chunked_quad_read_passed) {
+        printf("[QSPI-DIRECTION] 7-byte Quad-read chunk mismatch at %u: "
+               "expected=0x%02X actual=0x%02X\r\n",
+               (unsigned int)index, pattern[index], chunked[index]);
+      }
+      chunked_quad_read_passed = false;
+    }
+  }
+  if (chunked_quad_read_passed) {
+    printf("[QSPI-DIRECTION] Quad-read chunks <=7 PASS (%u bytes)\r\n",
+           (unsigned int)sizeof(pattern));
+  }
+
+  for (index = 0U; index < sizeof(pattern); ++index) {
+    const uint32_t byte_addr = addr_sel + ((uint32_t)index << 8U);
+    WIZCHIP_READ_BUF(byte_addr, &bytewise[index], 1U);
+  }
+  for (index = 0U; index < sizeof(pattern); ++index) {
+    if (bytewise[index] != pattern[index]) {
+      if (bytewise_quad_read_passed) {
+        printf("[QSPI-DIRECTION] 1-byte Quad-read chunk mismatch at %u: "
+               "expected=0x%02X actual=0x%02X\r\n",
+               (unsigned int)index, pattern[index], bytewise[index]);
+      }
+      bytewise_quad_read_passed = false;
+    }
+  }
+  if (bytewise_quad_read_passed) {
+    printf("[QSPI-DIRECTION] Quad-read chunks of 1 PASS (%u bytes)\r\n",
+           (unsigned int)sizeof(pattern));
+  }
+
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_QUAD);
+  WIZCHIP_WRITE_BUF(addr_sel, (uint8_t *)pattern, sizeof(pattern));
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_SINGLE);
+  memset(actual, 0, sizeof(actual));
+  WIZCHIP_READ_BUF(addr_sel, actual, sizeof(actual));
+  for (index = 0U; index < sizeof(pattern); ++index) {
+    if (actual[index] != pattern[index]) {
+      printf("[QSPI-DIRECTION] Quad-write/Single-read mismatch at %u: "
+             "expected=0x%02X actual=0x%02X\r\n",
+             (unsigned int)index, pattern[index], actual[index]);
+      quad_write_single_read_passed = false;
+    }
+  }
+  if (quad_write_single_read_passed) {
+    printf("[QSPI-DIRECTION] Quad-write/Single-read PASS (%u bytes)\r\n",
+           (unsigned int)sizeof(pattern));
+  }
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_QUAD);
+
+  return single_write_quad_read_passed && chunked_quad_read_passed &&
+         bytewise_quad_read_passed && quad_write_single_read_passed;
+}
+#endif
 
 static bool check_chip_identity(uint8_t *cidr_major, uint16_t *cidr_api,
                                 uint16_t *version)

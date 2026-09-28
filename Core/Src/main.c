@@ -45,10 +45,10 @@ int main(void)
          (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
                          W6300_OSPI_PRESCALER));
   if (w6300_app_run_qspi_diagnostic()) {
-    printf("[QSPI] %s diagnostic passed\r\n", w6300_port_mode_name());
+    printf("[QSPI] Single/Dual/Quad diagnostics passed\r\n");
     HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
   } else {
-    printf("[QSPI] %s diagnostic failed\r\n", w6300_port_mode_name());
+    printf("[QSPI] one or more Single/Dual/Quad diagnostics failed\r\n");
     HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
   }
   while (1) {
@@ -158,10 +158,10 @@ static void MX_OCTOSPI1_Init(void)
   hospi1.Init.DeviceSize = 17U;
   hospi1.Init.ChipSelectHighTime = 1U;
   hospi1.Init.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE;
-  hospi1.Init.ClockMode = HAL_OSPI_CLOCK_MODE_3;
+  hospi1.Init.ClockMode = W6300_OSPI_CLOCK_MODE;
   hospi1.Init.WrapSize = HAL_OSPI_WRAP_NOT_SUPPORTED;
   hospi1.Init.ClockPrescaler = W6300_OSPI_PRESCALER;
-  hospi1.Init.SampleShifting = HAL_OSPI_SAMPLE_SHIFTING_NONE;
+  hospi1.Init.SampleShifting = W6300_OSPI_SAMPLE_SHIFTING;
   /* No delay-block calibration is used during this blocking bring-up. */
   hospi1.Init.DelayBlockBypass = HAL_OSPI_DELAY_BLOCK_BYPASSED;
   hospi1.Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_DISABLE;

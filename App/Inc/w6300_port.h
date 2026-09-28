@@ -13,7 +13,8 @@ typedef struct {
 
 typedef enum {
   W6300_QSPI_BUS_SINGLE = 0,
-  W6300_QSPI_BUS_QUAD = 1
+  W6300_QSPI_BUS_DUAL = 1,
+  W6300_QSPI_BUS_QUAD = 2
 } W6300_QspiBusMode;
 
 void w6300_port_reset(void);

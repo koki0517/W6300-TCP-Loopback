@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import ipaddress
 import socket
 import sys
@@ -11,6 +12,28 @@ import time
 
 
 DEFAULT_SIZES = (1, 64, 512, 1460, 2048, 4096, 16384, 65536)
+CONNECT_REFUSED_RETRY_WINDOW = 0.25
+CONNECT_REFUSED_RETRY_INTERVAL = 0.01
+
+
+def connect_with_retry(host: str, port: int, timeout: float,
+                       source_address: tuple[str, int] | None
+                       ) -> tuple[socket.socket, int]:
+    """Retry brief ECONNREFUSED windows while the echo server re-listens."""
+    retry_deadline = time.monotonic() + CONNECT_REFUSED_RETRY_WINDOW
+    retries = 0
+    while True:
+        try:
+            connection = socket.create_connection(
+                (host, port), timeout=timeout, source_address=source_address
+            )
+            return connection, retries
+        except OSError as error:
+            remaining = retry_deadline - time.monotonic()
+            if error.errno != errno.ECONNREFUSED or remaining <= 0:
+                raise
+            retries += 1
+            time.sleep(min(CONNECT_REFUSED_RETRY_INTERVAL, remaining))
 
 
 def recv_exact(connection: socket.socket, length: int) -> bytes:
@@ -59,16 +82,17 @@ def run(args: argparse.Namespace) -> int:
 
     for size in sizes:
         durations = []
+        connect_retries = 0
         for iteration in range(args.count):
             payload = make_payload(size, iteration)
             started = time.perf_counter()
             try:
                 source_address = (args.source, 0) if args.source else None
-                with socket.create_connection(
-                    (args.host, args.port),
-                    timeout=args.timeout,
-                    source_address=source_address,
-                ) as connection:
+                connection, retries = connect_with_retry(
+                    args.host, args.port, args.timeout, source_address
+                )
+                connect_retries += retries
+                with connection:
                     connection.settimeout(args.timeout)
                     connection.sendall(payload)
                     echoed = recv_exact(connection, len(payload))
@@ -95,6 +119,7 @@ def run(args: argparse.Namespace) -> int:
         average_ms = sum(durations) * 1000.0 / len(durations)
         print(
             f"PASS size={size} count={args.count} bytes={size * args.count} "
+            f"connect_retries={connect_retries} "
             f"rtt_ms_avg={average_ms:.3f} "
             f"min={min(durations) * 1000.0:.3f} "
             f"max={max(durations) * 1000.0:.3f}"

@@ -92,7 +92,7 @@ NVIC.UsageFault_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 
 OCTOSPI1.ChipSelectHighTime=1
 
-OCTOSPI1.ClockMode=HAL_OSPI_CLOCK_MODE_3
+OCTOSPI1.ClockMode=HAL_OSPI_CLOCK_MODE_0
 
 OCTOSPI1.SampleShifting=HAL_OSPI_SAMPLE_SHIFTING_NONE
 
