@@ -15,7 +15,7 @@
 | --- | --- | --- | --- |
 | J3-1 | QD0 | CN10-23 | PD11 / QSPI_BK1_IO0 |
 | J3-2 | QD1 | CN10-21 | PD12 / QSPI_BK1_IO1 |
-| J3-3 | QD2 | CN10-25 | PE2 / QSPI_BK1_IO2 |
+| J3-3 | QD2 | CN9-26 | PF7 / OCTOSPI1_IO2 |
 | J3-4 | QD3 | CN10-19 | PD13 / QSPI_BK1_IO3 |
 | J3-5 | GND | GND | Ground |
 | J3-6 | QSPI_CLK | CN10-15 | PB2 / QSPI_CLK |
@@ -24,7 +24,7 @@
 | RSTn | Reset, active low | CN10-7 | PF4 / `W6300_RSTn` |
 | INTn | Interrupt, unused | Not connected | Not configured |
 
-**SB67 must be OFF.** This disconnects the NUCLEO circuitry from PE2 so PE2 can serve as QSPI_BK1_IO2. Confirm SB67 is off before powering the WIZ630io.
+現在の配線ではWIZ630io J3-3/QD2をCN9-26/PF7へ接続し、PE2は使用しません。SB67は変更せず、OFFにする必要もありません。この配線はPE2とSAI_A_MCLKの共有を避けています。
 
 ## PC IPv4 configuration
 

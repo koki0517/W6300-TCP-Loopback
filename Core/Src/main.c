@@ -14,6 +14,7 @@
 
 #include "app_config.h"
 #include "w6300_app.h"
+#include "w6300_port.h"
 /* USER CODE END Includes */
 
 OSPI_HandleTypeDef hospi1;
@@ -26,6 +27,9 @@ static void MX_USART3_UART_Init(void);
 
 int main(void)
 {
+  bool app_initialized;
+  uint32_t next_init_retry;
+
   HAL_Init();
   SystemClock_Config();
   MX_GPIO_Init();
@@ -33,14 +37,53 @@ int main(void)
   MX_OCTOSPI1_Init();
 
   /* USER CODE BEGIN 2 */
-  if (!w6300_app_init()) {
-    Error_Handler();
+#if APP_QSPI_DIAGNOSTIC_ONLY
+  printf("W6300 QSPI diagnostic firmware start\r\n");
+  printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
+         (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
+         W6300_OSPI_PRESCALER,
+         (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
+                         W6300_OSPI_PRESCALER));
+  if (w6300_app_run_qspi_diagnostic()) {
+    printf("[QSPI] %s diagnostic passed\r\n", w6300_port_mode_name());
+    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+  } else {
+    printf("[QSPI] %s diagnostic failed\r\n", w6300_port_mode_name());
+    HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
   }
+  while (1) {
+    HAL_Delay(1000U);
+  }
+#else
+  printf("W6300 TCP loopback firmware start\r\n");
+  printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
+         (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
+         W6300_OSPI_PRESCALER,
+         (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
+                         W6300_OSPI_PRESCALER));
+  app_initialized = w6300_app_init();
+  next_init_retry = HAL_GetTick() + APP_INIT_RETRY_MS;
+  if (!app_initialized) {
+    printf("[W6300] initialization failed; retrying\r\n");
+    HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
+  }
+#endif
   /* USER CODE END 2 */
 
   while (1) {
     /* USER CODE BEGIN WHILE */
-    w6300_app_poll();
+    if (app_initialized) {
+      w6300_app_poll();
+    } else if ((int32_t)(HAL_GetTick() - next_init_retry) >= 0) {
+      app_initialized = w6300_app_init();
+      next_init_retry = HAL_GetTick() + APP_INIT_RETRY_MS;
+      if (app_initialized) {
+        HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_RESET);
+      } else {
+        printf("[W6300] initialization retry failed\r\n");
+      }
+    }
+    HAL_Delay(1U);
     /* USER CODE END WHILE */
   }
 }
@@ -88,9 +131,17 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /* Keep OCTOSPI on the existing 275 MHz D1HCLK: / (8 + 1) ~= 30.6 MHz. */
+  /* PLL2R supplies 76 MHz; W6300_OSPI_PRESCALER sets the bring-up SCLK. */
   peripheral_clocks.PeriphClockSelection = RCC_PERIPHCLK_OSPI;
-  peripheral_clocks.OspiClockSelection = RCC_OSPICLKSOURCE_D1HCLK;
+  peripheral_clocks.OspiClockSelection = RCC_OSPICLKSOURCE_PLL2;
+  peripheral_clocks.PLL2.PLL2M = 1U;
+  peripheral_clocks.PLL2.PLL2N = 19U;
+  peripheral_clocks.PLL2.PLL2P = 2U;
+  peripheral_clocks.PLL2.PLL2Q = 2U;
+  peripheral_clocks.PLL2.PLL2R = 2U;
+  peripheral_clocks.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
+  peripheral_clocks.PLL2.PLL2VCOSEL = RCC_PLL2VCOMEDIUM;
+  peripheral_clocks.PLL2.PLL2FRACN = 0U;
   if (HAL_RCCEx_PeriphCLKConfig(&peripheral_clocks) != HAL_OK) {
     Error_Handler();
   }
@@ -104,7 +155,7 @@ static void MX_OCTOSPI1_Init(void)
   hospi1.Init.FifoThreshold = 1U;
   hospi1.Init.DualQuad = HAL_OSPI_DUALQUAD_DISABLE;
   hospi1.Init.MemoryType = HAL_OSPI_MEMTYPE_MICRON;
-  hospi1.Init.DeviceSize = 32U;
+  hospi1.Init.DeviceSize = 17U;
   hospi1.Init.ChipSelectHighTime = 1U;
   hospi1.Init.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE;
   hospi1.Init.ClockMode = HAL_OSPI_CLOCK_MODE_3;
@@ -131,8 +182,6 @@ static void MX_OCTOSPI1_Init(void)
            (unsigned long)hospi1.ErrorCode);
     Error_Handler();
   }
-  printf("[QSPI] OCTOSPI1 Port 1 configured, Mode 3, STR, prescaler %u "
-         "(~30.6 MHz)\r\n", W6300_OSPI_PRESCALER);
 }
 
 static void MX_USART3_UART_Init(void)

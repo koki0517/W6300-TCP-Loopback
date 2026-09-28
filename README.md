@@ -2,6 +2,8 @@
 
 NUCLEO-H723ZGとWIZ630io（W6300）をOCTOSPI1/QSPIで接続し、Windows PCから送信した任意のバイト列をそのまま返すTCP/IPv4サーバーです。STM32内蔵Ethernet、LwIP、FreeRTOS、DMAは使いません。
 
+実機では、参照ブランチのQuad設定（Mode 0、約0.96 MHz）でCIDR読出しが失敗し、Single 1-1-1へfallbackするとTCP echoが動作しました。1〜65536 byteのbinary echoと64 byte×200接続は成功しています。要求仕様のQuad 1-4-4は未成立で、原因をソフト設定だけでは説明できず、IO0〜IO3の信号・配線確認が残っています。詳細は[ハードウェア](docs/HARDWARE.md)と[firmware検証記録](docs/FIRMWARE.md)を参照してください。
+
 ## 構成
 
 ```text
@@ -43,6 +45,6 @@ py -3 tools\tcp_loopback_test.py
 
 ## 設定とライセンス
 
-IP、MAC、TCP port、socket番号、loopback bufferは[`App/Inc/app_config.h`](App/Inc/app_config.h)で変更できます。配線・SB67の設定は[docs/HARDWARE.md](docs/HARDWARE.md)、設計とCubeMX再生成時の注意点は[docs/FIRMWARE.md](docs/FIRMWARE.md)を参照してください。
+IP、MAC、TCP port、socket番号、loopback bufferは[`App/Inc/app_config.h`](App/Inc/app_config.h)で変更できます。配線（QD2=PF7、SB67変更なし）は[docs/HARDWARE.md](docs/HARDWARE.md)、設計とCubeMX再生成時の注意点は[docs/FIRMWARE.md](docs/FIRMWARE.md)を参照してください。
 
 このリポジトリはCubeIDE projectとSTM32CubeH7 HAL/CMSISの既存ライセンスを保持します。WIZnet ioLibrary_Driverはpinned Git submoduleとして配布します。ライセンス概要は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を確認してください。

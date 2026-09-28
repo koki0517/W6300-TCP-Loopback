@@ -52,8 +52,8 @@ Mcu.Pin7=PD13
 Mcu.Pin8=PD8
 Mcu.Pin9=PD9
 Mcu.Pin10=PE1
-Mcu.Pin11=PE2
-Mcu.Pin12=PF4
+Mcu.Pin11=PF4
+Mcu.Pin12=PF7
 Mcu.Pin13=PG6
 Mcu.Pin14=PH0-OSC_IN
 Mcu.Pin15=PH1-OSC_OUT
@@ -94,9 +94,11 @@ OCTOSPI1.ChipSelectHighTime=1
 
 OCTOSPI1.ClockMode=HAL_OSPI_CLOCK_MODE_3
 
-OCTOSPI1.ClockPrescaler=9
+OCTOSPI1.SampleShifting=HAL_OSPI_SAMPLE_SHIFTING_NONE
 
-OCTOSPI1.DeviceSize=32
+OCTOSPI1.ClockPrescaler=79
+
+OCTOSPI1.DeviceSize=17
 
 OCTOSPI1.FifoThreshold=1
 
@@ -104,7 +106,7 @@ OCTOSPI1.MemoryType=HAL_OSPI_MEMTYPE_MICRON
 
 OCTOSPI1.DelayBlockBypass=HAL_OSPI_DELAY_BLOCK_BYPASSED
 
-OCTOSPI1.IPParameters=DeviceSize,ChipSelectHighTime,ClockPrescaler,FifoThreshold,ClockMode,MemoryType,DelayBlockBypass
+OCTOSPI1.IPParameters=DeviceSize,ChipSelectHighTime,ClockPrescaler,FifoThreshold,ClockMode,SampleShifting,MemoryType,DelayBlockBypass
 
 PA13(JTMS/SWDIO).GPIOParameters=GPIO_Label
 
@@ -199,16 +201,6 @@ PE1.Locked=true
 
 PE1.Signal=GPIO_Output
 
-PE2.GPIOParameters=GPIO_Label
-
-PE2.GPIO_Label=W6300_QSPI_IO2
-
-PE2.Locked=true
-
-PE2.Mode=OCTOSPI1_IOL_Port1L
-
-PE2.Signal=OCTOSPIM_P1_IO2
-
 PF4.GPIOParameters=GPIO_Label
 
 PF4.GPIO_Label=W6300_RSTn
@@ -216,6 +208,16 @@ PF4.GPIO_Label=W6300_RSTn
 PF4.Locked=true
 
 PF4.Signal=GPIO_Output
+
+PF7.GPIOParameters=GPIO_Label
+
+PF7.GPIO_Label=W6300_QSPI_IO2
+
+PF7.Locked=true
+
+PF7.Mode=OCTOSPI1_IOL_Port1L
+
+PF7.Signal=OCTOSPIM_P1_IO2
 
 PG6.Locked=true
 
@@ -299,7 +301,7 @@ ProjectManager.UAScriptBeforePath=
 
 ProjectManager.UnderRoot=true
 
-ProjectManager.functionlistsort=1-SystemClock_Config-RCC-false-HAL-false,2-MX_GPIO_Init-GPIO-false-HAL-true,3-MX_OCTOSPI1_Init-OCTOSPI1-false-HAL-true,4-MX_USART3_UART_Init-USART3-false-HAL-true,0-MX_CORTEX_M7_Init-CORTEX_M7-false-HAL-true
+ProjectManager.functionlistsort=1-SystemClock_Config-RCC-false-HAL-false,2-MX_GPIO_Init-GPIO-false-HAL-true,3-MX_USART3_UART_Init-USART3-false-HAL-true,4-MX_OCTOSPI1_Init-OCTOSPI1-false-HAL-true,0-MX_CORTEX_M7_Init-CORTEX_M7-false-HAL-true
 
 RCC.ADCFreq_Value=76000000
 
@@ -407,9 +409,9 @@ RCC.PLLFRACN=0
 
 RCC.PLLSourceVirtual=RCC_PLLSOURCE_HSE
 
-RCC.QSPICLockSelection=RCC_OSPICLKSOURCE_D1HCLK
+RCC.QSPICLockSelection=RCC_OSPICLKSOURCE_PLL2
 
-RCC.QSPIFreq_Value=275000000
+RCC.QSPIFreq_Value=76000000
 
 RCC.RNGFreq_Value=48000000
 

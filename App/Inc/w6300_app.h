@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+bool w6300_app_run_qspi_diagnostic(void);
 bool w6300_app_init(void);
 void w6300_app_poll(void);
 

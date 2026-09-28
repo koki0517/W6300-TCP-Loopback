@@ -27,6 +27,7 @@ void HAL_OSPI_MspInit(OSPI_HandleTypeDef *hospi)
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
   gpio.Mode = GPIO_MODE_AF_PP;
@@ -40,8 +41,9 @@ void HAL_OSPI_MspInit(OSPI_HandleTypeDef *hospi)
   gpio.Pin = GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13;
   HAL_GPIO_Init(GPIOD, &gpio);
 
-  gpio.Pin = GPIO_PIN_2;
-  HAL_GPIO_Init(GPIOE, &gpio);
+  gpio.Pin = GPIO_PIN_7;
+  gpio.Alternate = GPIO_AF10_OCTOSPIM_P1;
+  HAL_GPIO_Init(GPIOF, &gpio);
 
   gpio.Pin = GPIO_PIN_6;
   gpio.Alternate = GPIO_AF10_OCTOSPIM_P1;
@@ -57,7 +59,7 @@ void HAL_OSPI_MspDeInit(OSPI_HandleTypeDef *hospi)
   __HAL_RCC_OSPI1_CLK_DISABLE();
   HAL_GPIO_DeInit(GPIOB, GPIO_PIN_2);
   HAL_GPIO_DeInit(GPIOD, GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13);
-  HAL_GPIO_DeInit(GPIOE, GPIO_PIN_2);
+  HAL_GPIO_DeInit(GPIOF, GPIO_PIN_7);
   HAL_GPIO_DeInit(GPIOG, GPIO_PIN_6);
 }
 

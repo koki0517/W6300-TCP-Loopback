@@ -24,8 +24,76 @@ static int32_t g_last_socket_error;
 
 static void log_network_info(const wiz_NetInfo *network);
 static bool check_qspi_errors(void);
+static bool check_chip_identity(uint8_t *cidr_major, uint16_t *cidr_api,
+                                uint16_t *version);
 static void poll_link_status(void);
 static void log_socket_state(uint8_t state);
+
+bool w6300_app_run_qspi_diagnostic(void)
+{
+  W6300_PortDiagnostics diagnostics = {0U, 0U, 0U, 0U};
+  uint16_t cidr_first = 0U;
+  uint16_t version_first = 0U;
+  uint16_t cidr_mismatches = 0U;
+  uint16_t version_mismatches = 0U;
+  uint16_t zero_count = 0U;
+  uint16_t ff_count = 0U;
+  uint16_t sample;
+  uint8_t cidr_major_first = 0U;
+  uint8_t system_status;
+  uint16_t index;
+
+  printf("\r\nW6300 QSPI register diagnostic start\r\n");
+  w6300_port_reset();
+  w6300_port_register_callbacks();
+
+  for (index = 0U; index < W6300_QSPI_DIAG_READ_COUNT; ++index) {
+    sample = WIZCHIP_READ(_CIDR_);
+    if (index == 0U) {
+      cidr_major_first = (uint8_t)sample;
+      cidr_first = getCIDR();
+    }
+    if (sample != (uint8_t)(W6300_EXPECTED_CIDR >> 8U)) {
+      ++cidr_mismatches;
+    }
+    if (sample == 0U) {
+      ++zero_count;
+    }
+    if (sample == 0x00FFU) {
+      ++ff_count;
+    }
+  }
+
+  version_first = getVER();
+  for (index = 1U; index < W6300_QSPI_DIAG_READ_COUNT; ++index) {
+    if (getVER() != version_first) {
+      ++version_mismatches;
+    }
+  }
+  system_status = getSYSR();
+  w6300_port_get_diagnostics(&diagnostics);
+
+  printf("[QSPI] CIDR major=0x%02X (normalized 0x%04X) reads=%u "
+         "expected=0x%02X mismatches=%u zero=%u ff=%u API=0x%04X RTL=0x%02X\r\n",
+         cidr_major_first, (uint16_t)cidr_major_first << 8U,
+         W6300_QSPI_DIAG_READ_COUNT,
+         (uint8_t)(W6300_EXPECTED_CIDR >> 8U), cidr_mismatches,
+         zero_count, ff_count, cidr_first, getRTL());
+  printf("[QSPI] VER first=0x%04X reads=%u mismatches=%u SYSR=0x%02X\r\n",
+         version_first, W6300_QSPI_DIAG_READ_COUNT, version_mismatches,
+         system_status);
+  printf("[QSPI] HAL OSPI errors=%lu last status=%lu state=0x%02lX "
+         "ErrorCode=0x%08lX\r\n",
+         (unsigned long)diagnostics.hal_error_count,
+         (unsigned long)diagnostics.last_hal_status,
+         (unsigned long)diagnostics.last_hal_state,
+         (unsigned long)diagnostics.last_hal_error_code);
+
+  return (cidr_major_first == (uint8_t)(W6300_EXPECTED_CIDR >> 8U)) &&
+         (cidr_mismatches == 0U) && (version_mismatches == 0U) &&
+         (version_first != 0U) && (version_first != 0xFFFFU) &&
+         (diagnostics.hal_error_count == 0U);
+}
 
 bool w6300_app_init(void)
 {
@@ -38,24 +106,32 @@ bool w6300_app_init(void)
   wiz_NetInfo network = {0};
   uint16_t cidr;
   uint16_t version;
+  uint8_t cidr_major;
   int8_t result;
 
   printf("\r\nW6300 TCP loopback firmware start\r\n");
 
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_QUAD);
   w6300_port_reset();
   w6300_port_register_callbacks();
 
-  cidr = getCIDR();
-  version = getVER();
-  printf("[QSPI] CIDR=0x%04X VER=0x%04X SYSR=0x%02X\r\n",
-         cidr, version, getSYSR());
+  if (!check_chip_identity(&cidr_major, &cidr, &version)) {
+    printf("[QSPI] Quad identity check failed; retrying in Single 1-1-1\r\n");
+    w6300_port_clear_diagnostics();
+    w6300_port_set_qspi_mode(W6300_QSPI_BUS_SINGLE);
+    w6300_port_reset();
+    w6300_port_register_callbacks();
+    if (!check_chip_identity(&cidr_major, &cidr, &version)) {
+      printf("[QSPI] Single identity check failed; W6300 init will retry\r\n");
+      return false;
+    }
+    printf("[QSPI] Single 1-1-1 fallback selected\r\n");
+  } else {
+    printf("[QSPI] Quad 1-4-4 identity check passed\r\n");
+  }
   w6300_port_get_diagnostics(&diagnostics);
-  if ((diagnostics.hal_error_count != 0U) ||
-      (cidr != W6300_EXPECTED_CIDR) || (version == 0U) ||
-      (version == 0xFFFFU)) {
-    printf("[QSPI] sanity check failed (CIDR expected 0x%04X, "
-           "HAL errors=%lu)\r\n",
-           W6300_EXPECTED_CIDR,
+  if (diagnostics.hal_error_count != 0U) {
+    printf("[QSPI] sanity check failed after fallback (HAL errors=%lu)\r\n",
            (unsigned long)diagnostics.hal_error_count);
     return false;
   }
@@ -156,6 +232,32 @@ static bool check_qspi_errors(void)
   W6300_PortDiagnostics diagnostics;
   w6300_port_get_diagnostics(&diagnostics);
   return diagnostics.hal_error_count == 0U;
+}
+
+static bool check_chip_identity(uint8_t *cidr_major, uint16_t *cidr_api,
+                                uint16_t *version)
+{
+  W6300_PortDiagnostics diagnostics = {0U, 0U, 0U, 0U};
+  const uint8_t expected_major = (uint8_t)(W6300_EXPECTED_CIDR >> 8U);
+
+  *cidr_major = WIZCHIP_READ(_CIDR_);
+  *cidr_api = getCIDR();
+  *version = getVER();
+  printf("[QSPI] CIDR major=0x%02X normalized=0x%04X API=0x%04X "
+         "RTL=0x%02X VER=0x%04X SYSR=0x%02X\r\n",
+         *cidr_major, (uint16_t)*cidr_major << 8U, *cidr_api, getRTL(),
+         *version, getSYSR());
+  w6300_port_get_diagnostics(&diagnostics);
+  printf("[QSPI] HAL OSPI errors=%lu last status=%lu state=0x%02lX "
+         "ErrorCode=0x%08lX\r\n",
+         (unsigned long)diagnostics.hal_error_count,
+         (unsigned long)diagnostics.last_hal_status,
+         (unsigned long)diagnostics.last_hal_state,
+         (unsigned long)diagnostics.last_hal_error_code);
+
+  return (*cidr_major == expected_major) &&
+         (*version == W6300_EXPECTED_VERSION) &&
+         (diagnostics.hal_error_count == 0U);
 }
 
 static void poll_link_status(void)
