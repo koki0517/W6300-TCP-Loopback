@@ -1,50 +1,45 @@
 # W6300 TCP Loopback
 
-NUCLEO-H723ZGとWIZ630io（W6300）をOCTOSPI1/QSPIで接続し、PCから送信した任意のバイト列を返すTCP/IPv4サーバーです。STM32内蔵Ethernet、LwIP、FreeRTOS、DMAは使いません。
+`NUCLEO-H723ZG` と `WIZ630io`（`W6300`）を `OCTOSPI1` で接続し、PC からの `TCP/IPv4` データをそのまま echo するサンプルです。STM32 内蔵 Ethernet、`LwIP`、`FreeRTOS`、`DMA` は使用しません。
 
-Windows側ではSingle fallbackによるTCP echoが完全に成功しています。Ubuntuでは2026-09-29にWIZ630io J3 GNDをNUCLEOへ追加接続し、OCTOSPIのCS high timeを2 cycleにした条件でQuad payload readが正常化しました。Single/Dual/Quad buffer matrixとTCPの1 byte〜64 KiB、64 byte x 1000接続が成功しています。GND追加だけの寄与とCS high time変更の寄与は個別には確定していません。現行配線、再現条件、過去の失敗を含む検証履歴は[ハードウェア手順](docs/HARDWARE.md)、[Ubuntu 22.04テスト](docs/UBUNTU_TEST.md)、[firmware検証記録](docs/FIRMWARE.md)に記録しています。
+## Validation status
 
-## 構成
+Ubuntu 22.04 で `Quad 1-4-4` の identity、buffer read/write、TCP echo を実機確認しています。検証条件は `SCK 0.962 MHz`、`ChipSelectHighTime=2`、`WIZ630io` の `J3-5 GND` と `J2 GND` の接続です。`1 byte`〜`64 KiB` の payload と、64 byte の新規接続 1,000 回が成功しました。詳細と条件は [Ubuntu validation](docs/UBUNTU_TEST.md) を参照してください。Windows で記録した結果は Single fallback による通信確認です。
+
+## Hardware
 
 ```text
-Windows PC                             NUCLEO-H723ZG
-192.168.0.20/24                       STM32H723ZGTx
-Python TCP client   ── Ethernet ──>   OCTOSPI1/QSPI ── WIZ630io / W6300
-192.168.0.10:5000  <── echo bytes ──   hardwired TCP/IPv4 server
+PC 192.168.0.20/24
+    │ Ethernet
+WIZ630io / W6300 192.168.0.10/24
+    │ OCTOSPI1
+NUCLEO-H723ZG
 ```
 
-## 必要なもの
+必要なもの、現在の配線、PC 側 IP 設定は [Hardware and wiring](docs/HARDWARE.md) を参照してください。
 
-- NUCLEO-H723ZG、WIZ630io、配線（[ハードウェア手順](docs/HARDWARE.md)）
-- STM32CubeIDE 1.16.x（Windows 1.16.0、Ubuntu 1.16.1で検証）とSTM32CubeH7 FW **1.11.2**
-- Python 3（標準ライブラリだけを使います）
-- Git for Windows
+## Build and run
 
-## Quick start
+1. Clone the repository with its pinned submodule:
 
-```powershell
-git clone --recurse-submodules https://github.com/koki0517/W6300-TCP-Loopback.git
-cd W6300-TCP-Loopback
-```
+   ```bash
+   git clone --recurse-submodules https://github.com/koki0517/W6300-TCP-Loopback.git
+   ```
 
-既存のcloneを使う場合はsubmoduleを取得します。
+2. Open `W6300-TCP-Loopback.ioc` in `CubeMX 6.12.0` with `STM32CubeH7 1.11.2` installed and run **Generate Code** to restore the ignored HAL/CMSIS and generated support files. Then import the repository as an existing `STM32CubeIDE` project, build `Debug`, flash the ELF with `STM32CubeProgrammer`, and reset the board. See [Firmware and build](docs/FIRMWARE.md).
 
-```powershell
-git submodule update --init --recursive
-```
+3. Connect the PC Ethernet adapter to `WIZ630io` and set it to `192.168.0.20/24`. Follow the platform guide: [Windows](docs/WINDOWS_TEST.md) or [Ubuntu 22.04](docs/UBUNTU_TEST.md).
 
-STM32CubeIDEで既存のCubeIDE projectとしてリポジトリをimportし、`Debug` configurationをbuildします。NUCLEOをST-LINK USBで接続してDebug ELFを書き込み、resetします。詳細は[firmware手順](docs/FIRMWARE.md)を参照してください。
+4. Run the standard-library `Python` client:
 
-Windows Ethernet adapterに`192.168.0.20`、サブネットマスク`255.255.255.0`を設定し、PCをWIZ630ioのRJ45へ接続します。gatewayとDNSは空欄のままで構いません。
+   ```bash
+   python3 tools/tcp_loopback_test.py --host 192.168.0.10 --source 192.168.0.20
+   ```
 
-```powershell
-py -3 tools\tcp_loopback_test.py
-```
+   On Windows, use py -3 tools\tcp_loopback_test.py.
 
-このテストは0x00を含むbinary payloadを使い、1 byteから64 KiBまでを送受信して完全一致を確認します。Windows手順は[Windowsテスト](docs/WINDOWS_TEST.md)、Ubuntu 22.04でのbuild/flash/UART/Ethernet手順は[Ubuntuテスト](docs/UBUNTU_TEST.md)にあります。
+The default test matrix sends binary payloads from `1 byte` through `64 KiB` and checks every returned byte. `Python` packages are not required.
 
-## 設定とライセンス
+## Configuration and license
 
-IP、MAC、TCP port、socket番号、loopback bufferは[`App/Inc/app_config.h`](App/Inc/app_config.h)で変更できます。Windows手順は[docs/WINDOWS_TEST.md](docs/WINDOWS_TEST.md)、Ubuntu 22.04のbuild/flash/UART/Ethernet手順は[docs/UBUNTU_TEST.md](docs/UBUNTU_TEST.md)、現在の配線は[docs/HARDWARE.md](docs/HARDWARE.md)を参照してください。
-
-このリポジトリはCubeIDE projectとSTM32CubeH7 HAL/CMSISの既存ライセンスを保持します。WIZnet ioLibrary_Driverはpinned Git submoduleとして配布します。ライセンス概要は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を確認してください。
+Network settings, TCP port, socket, and buffer size are in [app_config.h](App/Inc/app_config.h). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency and license information.

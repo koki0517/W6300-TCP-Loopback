@@ -1,8 +1,6 @@
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 
-#include <stdint.h>
-
 /* Static IPv4 configuration used by the direct PC-to-WIZ630io test link. */
 #define APP_MAC_ADDRESS          {0x02U, 0x00U, 0x00U, 0x00U, 0x00U, 0x10U}
 #define APP_IPV4_ADDRESS         {192U, 168U, 0U, 10U}
@@ -14,35 +12,17 @@
 #define APP_TCP_SOCKET           0U
 #define APP_LOOPBACK_BUFFER_SIZE 2048U
 
-/* Set to 1 to compare Single, Dual, and Quad register reads without networking. */
-#define APP_QSPI_DIAGNOSTIC_ONLY 0U
-
-/* Set to 1 to exercise TX-buffer read/write payloads in the QSPI diagnostic. */
-#define APP_QSPI_BUFFER_DIAGNOSTIC 0U
-
-/* Repeat one fixed-pattern Quad read for logic-analyzer capture; network stays off. */
-#define APP_QSPI_REPEAT_READ_DIAGNOSTIC 0U
-#define APP_QSPI_REPEAT_READ_INTERVAL_MS 2U
-
-/* Set to 1 to match the Golden Reference ioLibrary critical callbacks. */
-#define W6300_GOLDEN_CRITICAL_CALLBACKS 0U
-
-/* Use HAL_OSPI_CLOCK_MODE_0 for the WIZnet Golden Reference timing comparison. */
 #define W6300_OSPI_CLOCK_MODE HAL_OSPI_CLOCK_MODE_0
 #define W6300_OSPI_SAMPLE_SHIFTING HAL_OSPI_SAMPLE_SHIFTING_NONE
 
 #define W6300_RESET_LOW_MS       100U
 #define W6300_RESET_SETTLE_MS    100U
 #define W6300_OSPI_TIMEOUT_MS    1000U
-#define W6300_OSPI_KERNEL_CLOCK_HZ 76000000UL
 #define W6300_OSPI_PRESCALER     79U
 #define W6300_QSPI_DUMMY_CYCLES  2U
-#define W6300_QSPI_DUAL_DUMMY_CYCLES 4U
 #define W6300_QSPI_SINGLE_DUMMY_CYCLES 8U
 #define W6300_EXPECTED_CIDR      0x6100U
 #define W6300_EXPECTED_VERSION    0x4661U
-#define W6300_QSPI_DIAG_READ_COUNT 100U
-#define W6300_QSPI_DIAG_TRACE_COUNT 12U
 
 #define APP_STATUS_POLL_MS       1000U
 #define APP_INIT_RETRY_MS        1000U

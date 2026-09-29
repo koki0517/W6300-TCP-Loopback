@@ -37,48 +37,13 @@ int main(void)
   MX_OCTOSPI1_Init();
 
   /* USER CODE BEGIN 2 */
-#if APP_QSPI_REPEAT_READ_DIAGNOSTIC
-  printf("W6300 repeated Quad receive diagnostic firmware start\r\n");
-  printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
-         (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
-         W6300_OSPI_PRESCALER,
-         (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
-                         W6300_OSPI_PRESCALER));
-  w6300_app_run_repeated_quad_read_diagnostic();
-  while (1) {
-    HAL_Delay(1000U);
-  }
-#elif APP_QSPI_DIAGNOSTIC_ONLY
-  printf("W6300 QSPI diagnostic firmware start\r\n");
-  printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
-         (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
-         W6300_OSPI_PRESCALER,
-         (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
-                         W6300_OSPI_PRESCALER));
-  if (w6300_app_run_qspi_diagnostic()) {
-    printf("[QSPI] Single/Dual/Quad diagnostics passed\r\n");
-    HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
-  } else {
-    printf("[QSPI] one or more Single/Dual/Quad diagnostics failed\r\n");
-    HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
-  }
-  while (1) {
-    HAL_Delay(1000U);
-  }
-#else
   printf("W6300 TCP loopback firmware start\r\n");
-  printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
-         (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
-         W6300_OSPI_PRESCALER,
-         (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
-                         W6300_OSPI_PRESCALER));
   app_initialized = w6300_app_init();
   next_init_retry = HAL_GetTick() + APP_INIT_RETRY_MS;
   if (!app_initialized) {
     printf("[W6300] initialization failed; retrying\r\n");
     HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
   }
-#endif
   /* USER CODE END 2 */
 
   while (1) {

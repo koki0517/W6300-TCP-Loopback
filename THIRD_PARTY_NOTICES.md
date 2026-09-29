@@ -6,4 +6,4 @@
 
 ## STMicroelectronics STM32CubeH7 HAL and CMSIS
 
-The existing STM32CubeH7 HAL and CMSIS files are retained under `Drivers/`. Their original STMicroelectronics license and notice files remain alongside the respective source trees. Refer to those notices for their terms.
+The project targets `STM32CubeH7 FW 1.11.2`. CubeMX restores the ignored `Drivers/` HAL and CMSIS source tree from that installed package during code generation. Refer to the package's original STMicroelectronics license and notice files for their terms.

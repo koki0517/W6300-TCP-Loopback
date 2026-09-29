@@ -3,6 +3,13 @@
 Debug/
 Release/
 
+# STM32CubeMX generated support and vendor sources.
+# Restore these from W6300-TCP-Loopback.ioc with CubeMX 6.12 / CubeH7 1.11.2.
+/Drivers/
+/Core/Inc/
+/Core/Src/stm32h7xx_hal_msp.c
+/Core/Src/stm32h7xx_it.c
+
 # Compiler and linker output
 *.elf
 *.bin
