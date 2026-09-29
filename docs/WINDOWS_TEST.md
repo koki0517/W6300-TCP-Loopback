@@ -69,7 +69,7 @@ Any connection, timeout, EOF, or payload mismatch exits non-zero. Ctrl+C exits w
 | PHY remains DOWN | Connect the PC adapter to the WIZ630io RJ45, not the NUCLEO onboard Ethernet connector. Confirm the PC adapter is up. |
 | Ping fails | Check PC `192.168.0.20/24`, W6300 `192.168.0.10/24`, PHY link, ARP, and UART CIDR sanity before investigating TCP. |
 | TCP connect fails | Confirm UART reports `[TCP] listening on port 5000`, then check `Test-NetConnection`, adapter selection, and IP settings. |
-| Quad identity passes but payload data is wrong | Current Ubuntu PF7 wiring passed identity reads but failed Quad TX-buffer reads and TCP payload comparison. Check the Quad receive phase and QD0-QD3 signals; see the measured captures/results in [UBUNTU_TEST.md](UBUNTU_TEST.md). |
+| Quad identity passes but payload data is wrong | An earlier Ubuntu run with the current PF7 route showed Quad payload corruption. The 2026-09-29 follow-up passed the buffer matrix and TCP tests with J3 GND connected and `ChipSelectHighTime=2`; see the A/B sequence and limits on attribution in [UBUNTU_TEST.md](UBUNTU_TEST.md). |
 | Single identity read fails or HAL reports a QSPI error | Check PB2 clock, PG6 hardware NCS, PD11/PD12/PF7/PD13 data wiring, Clock Mode 0, address/data phases, dummy cycles, and reset. |
 | QSPI IO2 is unreliable | The current QD2 path is WIZ630io J3-3 to PF7 at CN9-26/D62. SB67 affects the alternate PE2 board route and is not in this PF7 signal path. |
 

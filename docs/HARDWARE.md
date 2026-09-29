@@ -24,7 +24,9 @@
 | RSTn | Reset, active low | CN10-7 | PF4 / `W6300_RSTn` |
 | INTn | Interrupt, unused | Not connected | Not configured |
 
-**QD2:** 現在の配線はWIZ630io J3-3からPF7（CN9-26/D62）です。CubeMX/HAL MSPはPF7 AF10、OCTOSPIM Port 1 LOW group（IO0〜IO3）として設定しています。ユーザー確認ではSB67上のチップ抵抗は取り外し済みですが、SB67はPE2の基板内routeを選ぶためのもので、PF7への外部配線には入りません。以前のPE2配線による試験記録はUbuntuテスト記録に履歴として残しています。PF7配線の導通確認が必要な場合は、WIZ630io J3-3からNUCLEO CN9-26/D62までを測定してください。[ST UM2407](https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-board-stmicroelectronics.pdf)と[ST STM32H723ZG datasheet](https://www.st.com/resource/en/datasheet/stm32h723zg.pdf)を参照。
+QSPI test wiring includes WIZ630io J3-5 GND connected to NUCLEO GND, in addition to the already connected WIZ630io J2 GND. After adding the J3 ground, the user observed a cleaner waveform at the WIZ630io. Keep the J3 ground connected for the current Quad test setup; the paired ground and firmware timing experiments are recorded in [UBUNTU_TEST.md](UBUNTU_TEST.md).
+
+**QD2:** 現在の配線はWIZ630io J3-3からPF7（CN9-26/D62）です。CubeMX/HAL MSPはPF7 AF10、OCTOSPIM Port 1 LOW group（IO0〜IO3）として設定しています。SB67はPE2の基板内routeに関係しますが、PF7への外部配線には入りません。SB67上のチップ抵抗の実装状態は確認していません。過去の物理配線状態は独立に確認できていないため、過去の試験記録から推定しません。PF7配線の導通確認が必要な場合は、WIZ630io J3-3からNUCLEO CN9-26/D62までを測定してください。[ST UM2407](https://www.st.com/resource/en/user_manual/um2407-stm32h7-nucleo144-board-stmicroelectronics.pdf)と[ST STM32H723ZG datasheet](https://www.st.com/resource/en/datasheet/stm32h723zg.pdf)を参照。
 
 ## PC IPv4 configuration
 

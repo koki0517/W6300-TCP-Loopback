@@ -37,7 +37,18 @@ int main(void)
   MX_OCTOSPI1_Init();
 
   /* USER CODE BEGIN 2 */
-#if APP_QSPI_DIAGNOSTIC_ONLY
+#if APP_QSPI_REPEAT_READ_DIAGNOSTIC
+  printf("W6300 repeated Quad receive diagnostic firmware start\r\n");
+  printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
+         (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
+         W6300_OSPI_PRESCALER,
+         (unsigned long)(W6300_OSPI_KERNEL_CLOCK_HZ /
+                         W6300_OSPI_PRESCALER));
+  w6300_app_run_repeated_quad_read_diagnostic();
+  while (1) {
+    HAL_Delay(1000U);
+  }
+#elif APP_QSPI_DIAGNOSTIC_ONLY
   printf("W6300 QSPI diagnostic firmware start\r\n");
   printf("[QSPI] kernel=%lu Hz prescaler=%u effective SCLK=%lu Hz\r\n",
          (unsigned long)W6300_OSPI_KERNEL_CLOCK_HZ,
@@ -131,7 +142,7 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /* PLL2R supplies 76 MHz; W6300_OSPI_PRESCALER sets the bring-up SCLK. */
+  /* PLL2R supplies 76 MHz; W6300_OSPI_PRESCALER sets the SCLK. */
   peripheral_clocks.PeriphClockSelection = RCC_PERIPHCLK_OSPI;
   peripheral_clocks.OspiClockSelection = RCC_OSPICLKSOURCE_PLL2;
   peripheral_clocks.PLL2.PLL2M = 1U;
@@ -156,7 +167,7 @@ static void MX_OCTOSPI1_Init(void)
   hospi1.Init.DualQuad = HAL_OSPI_DUALQUAD_DISABLE;
   hospi1.Init.MemoryType = HAL_OSPI_MEMTYPE_MICRON;
   hospi1.Init.DeviceSize = 17U;
-  hospi1.Init.ChipSelectHighTime = 1U;
+  hospi1.Init.ChipSelectHighTime = 2U;
   hospi1.Init.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE;
   hospi1.Init.ClockMode = W6300_OSPI_CLOCK_MODE;
   hospi1.Init.WrapSize = HAL_OSPI_WRAP_NOT_SUPPORTED;

@@ -20,6 +20,10 @@
 /* Set to 1 to exercise TX-buffer read/write payloads in the QSPI diagnostic. */
 #define APP_QSPI_BUFFER_DIAGNOSTIC 0U
 
+/* Repeat one fixed-pattern Quad read for logic-analyzer capture; network stays off. */
+#define APP_QSPI_REPEAT_READ_DIAGNOSTIC 0U
+#define APP_QSPI_REPEAT_READ_INTERVAL_MS 2U
+
 /* Set to 1 to match the Golden Reference ioLibrary critical callbacks. */
 #define W6300_GOLDEN_CRITICAL_CALLBACKS 0U
 

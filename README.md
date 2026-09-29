@@ -2,7 +2,7 @@
 
 NUCLEO-H723ZGとWIZ630io（W6300）をOCTOSPI1/QSPIで接続し、PCから送信した任意のバイト列を返すTCP/IPv4サーバーです。STM32内蔵Ethernet、LwIP、FreeRTOS、DMAは使いません。
 
-Windows側ではSingle fallbackによるTCP echoが完全に成功しています。UbuntuでQD2をPF7へ配線し直した後は、Single/Dual/Quadのidentity readが各100/100で成功しました。一方、QuadのTX-buffer readでは8 byteからデータ不一致が起き、TCPでも接続後の64 byte payloadが不一致でした。現在はQuad read data pathを切り分けています。実配線、過去のPE2試験、UART・register・network結果は[ハードウェア手順](docs/HARDWARE.md)、[Ubuntu 22.04テスト](docs/UBUNTU_TEST.md)、[firmware検証記録](docs/FIRMWARE.md)に記録しています。
+Windows側ではSingle fallbackによるTCP echoが完全に成功しています。Ubuntuでは2026-09-29にWIZ630io J3 GNDをNUCLEOへ追加接続し、OCTOSPIのCS high timeを2 cycleにした条件でQuad payload readが正常化しました。Single/Dual/Quad buffer matrixとTCPの1 byte〜64 KiB、64 byte x 1000接続が成功しています。GND追加だけの寄与とCS high time変更の寄与は個別には確定していません。現行配線、再現条件、過去の失敗を含む検証履歴は[ハードウェア手順](docs/HARDWARE.md)、[Ubuntu 22.04テスト](docs/UBUNTU_TEST.md)、[firmware検証記録](docs/FIRMWARE.md)に記録しています。
 
 ## 構成
 

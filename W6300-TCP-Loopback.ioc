@@ -90,7 +90,7 @@ NVIC.SysTick_IRQn=true\:0\:0\:false\:false\:true\:false\:true\:false
 
 NVIC.UsageFault_IRQn=true\:0\:0\:false\:false\:true\:false\:false\:false
 
-OCTOSPI1.ChipSelectHighTime=1
+OCTOSPI1.ChipSelectHighTime=2
 
 OCTOSPI1.ClockMode=HAL_OSPI_CLOCK_MODE_0
 

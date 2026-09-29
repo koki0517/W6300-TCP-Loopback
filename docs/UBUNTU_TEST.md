@@ -1,10 +1,11 @@
 # Ubuntu 22.04 build and hardware validation
 
-This document records the Linux handoff from the Windows-tested firmware and the Ubuntu 22.04 measurements made on 2026-09-28. The board was already wired to the WIZ630io; the host network changes below are limited to that direct-link adapter.
+This document records the Linux handoff from the Windows-tested firmware and the Ubuntu 22.04 measurements made on 2026-09-28 and 2026-09-29. The board was already wired to the WIZ630io; the host network changes below are limited to that direct-link adapter.
 
 ## Handoff baseline
 
 - The repository was fetched from `origin/main` before testing. Start HEAD and current `origin/main` are both `6a4a292149fe129a4f9c9abfc8c360f48faf92d5` (`Implement W6300 TCP loopback and QSPI diagnostics`). The required Windows handoff commit is included.
+- The controlled DeviceSize/kernel-source follow-up started from `8441dc326c576265e3f4c9555444c9565c5797fc` (`Add Dual QSPI diagnostics and Ubuntu validation`); `origin/main` matched that commit at the start of this follow-up.
 - The pinned ioLibrary submodule is `3e01f80f82773c10cdead6be4332e7cd116cb323`.
 - Initial `git status --short` was empty. No commit or push was made.
 - Host: Ubuntu 22.04.5 LTS, kernel `6.8.0-138-generic`.
@@ -84,7 +85,7 @@ ip neigh show 192.168.0.10 dev <iface>
 python3 tools/tcp_loopback_test.py --host 192.168.0.10 --source 192.168.0.20
 ```
 
-Before moving QD2 to PF7, normal firmware used Quad identity followed by Single fallback. Across the recorded pre-PF7 stages, ping passed 3/3, ARP resolved to `02:00:00:00:00:10`, and the default Python matrix passed all eight sizes (90,101 bytes). These are valid historical Single-fallback results, not current PF7 Quad payload results. Current PF7 results are recorded in the final section below.
+In earlier firmware/configuration runs before the current PF7 setup, Quad identity fell back to Single. Across those recorded runs, ping passed 3/3, ARP resolved to `02:00:00:00:00:10`, and the default Python matrix passed all eight sizes (90,101 bytes). These are valid historical Single-fallback results, not current PF7 Quad payload results. The physical QD2 route during each earlier run was not independently verified. Current PF7 results are recorded in the final section below.
 
 On this W6300 server, socket 0 briefly leaves LISTEN while a connection closes and reopens. The client therefore retries only an initial `ECONNREFUSED` for up to 250 ms; the retry count is printed. The retry is platform-neutral and needed for a repeatable fresh-connection matrix. The Windows test procedure remains available in [WINDOWS_TEST.md](WINDOWS_TEST.md).
 
@@ -110,7 +111,7 @@ The known-working UDP2CANFD design is treated as a Golden Reference. Its KiCad/B
 | OSPIM `ClkPort` / `NCSPort` | Port 1 / Port 1 | Port 1 / Port 1 | Same. |
 | OSPIM `IOLowPort` | `HAL_OSPIM_IOPORT_1_HIGH`, physical P1 IO4–IO7 | `HAL_OSPIM_IOPORT_1_LOW`, physical P1 IO0–IO3 | Pin-group difference only; each selects the physical group actually wired on that board. Live NUCLEO PCR confirmed LOW is enabled. |
 | GPIO pins / AF | PA3 AF12 CLK; PB10 AF9 NCS; PC1 AF10 IO4; PC2/PC3 AF4 IO5/IO6; PE10 AF10 IO7 | PB2 AF9 CLK; PG6 AF10 NCS; PD11/PD12/PD13 AF9 IO0/IO1/IO3; PF7 AF10 IO2 (current) | Package/pin assignment difference. Do not copy Golden pin names to the NUCLEO. |
-| IO2 routing / SB67 | Port 1 HIGH group, IO4–IO7 | Port 1 LOW group, IO0–IO3; QD2 is externally wired to PF7 | Pin-group and external-pin difference only. SB67 controls the alternate PE2 board route and is outside the current PF7 path; its chip resistor is removed. |
+| IO2 routing / SB67 | Port 1 HIGH group, IO4–IO7 | Port 1 LOW group, IO0–IO3; current QD2 route is PF7 | Pin-group and external-pin difference only. SB67 concerns the alternate PE2 board route and is outside the current PF7 path; its resistor state has not been verified. |
 | GPIO speed / pull | Very high / no pull | Very high / no pull | Same electrical GPIO configuration. |
 | Instruction phase | 1 line, 8 bits | 1 line, 8 bits | Same. |
 | Address phase | 4 lines | 4 lines | Same for Quad. |
@@ -147,7 +148,7 @@ On the low-speed Mode 0 diagnostic, SWD readback was:
 | `RCC_D1CCIPR` (`0x5802444C`) | `0x00000020` | OCTOSPI kernel source is PLL2R. |
 | `OCTOSPIM_P1CR` (`0x5200B404`) | `0x02010101` | CLK, NCS, and IO[3:0] are enabled from OCTOSPI1; IO[7:4] enable is clear. |
 | GPIO AF current PF7 configuration | GPIOF_MODER=`0xFFFFBDFF`; OSPEEDR=`0x0000C000`; PUPDR=`0`; AFRL=`0xA0000000` | PF7 AF10, very-high speed, no pull; P1CR=`0x02010101` routes Port 1 LOW (IO0–IO3). |
-| GPIO AF historical PE2 configuration | GPIOE_MODER=`0xFFFFFFE7`; OSPEEDR=`0x00000030`; PUPDR=`0`; AFRL=`0x00000A00`; PF7 AFRL=`0` | Earlier PE2 AF10 configuration; later superseded by the physical PF7 reroute. |
+| GPIO AF historical PE2 configuration | GPIOE_MODER=`0xFFFFFFE7`; OSPEEDR=`0x00000030`; PUPDR=`0`; AFRL=`0x00000A00`; PF7 AFRL=`0` | Earlier firmware GPIO setup used PE2 AF10. Physical wiring and SB67 state during that test were not independently verified. |
 | `OCTOSPI1_CR` | `0x10000001` | OCTOSPI enabled; FIFO threshold 1. |
 | `OCTOSPI1_DCR1` | `0x00100008` | DeviceSize 17, Mode 0, delay block bypassed. |
 | `OCTOSPI1_DCR2` | `0x0000004E` | Prescaler register 78, divisor 79. |
@@ -156,11 +157,11 @@ On the low-speed Mode 0 diagnostic, SWD readback was:
 | `OCTOSPI1_TCR` | `0x00000002` | Two dummy cycles. |
 | `OCTOSPI1_IR` / `AR` | `0x00000080` / `0x00002000` | Quad opcode and last diagnostic address (SYSR). |
 
-The pre-PF7 and PE2-era results below preserve the chronological test record. At that time, some firmware builds selected PF7 while QD2 was physically on PE2; later PE2-matched tests also failed Quad identity. The user subsequently moved QD2 to PF7, after which all three identity modes passed. Do not use the earlier zero-CIDR observations as the current PF7 result.
+The earlier results below preserve the chronological test record. Their firmware pin configurations are known from source/register records, but the physical QD2 route at each historical test time was not independently verified. The current physical QD2 route is PF7, and all three identity modes pass in that setup. Do not use earlier zero-CIDR observations as the current PF7 result.
 
-## Historical Quad and Dual identity results before PF7 reroute
+## Historical Quad and Dual identity results before current PF7 configuration
 
-The first all-mode diagnostic and the Golden-clock retry below were run before the physical wiring correction was known; firmware used PF7 for IO2 while the wire was on PE2. They are retained as historical results, but their Quad failures do not test a complete IO2 route. The PE2-corrected rerun is recorded separately below. The all-mode diagnostic is isolated from network initialization. To reproduce the low-speed comparison, set `APP_QSPI_DIAGNOSTIC_ONLY` to `1U` and `W6300_OSPI_CLOCK_MODE` to `HAL_OSPI_CLOCK_MODE_0` in `App/Inc/app_config.h`; keep the normal PLL2R 76 MHz and prescaler 79. The firmware hardware-resets W6300 before each mode and reads raw CIDR 100 times, API CIDR, RTL, VER 100 times, SYSR, HAL status/state/error code, and error count.
+The first all-mode diagnostic and the Golden-clock retry below are retained as historical results. Their firmware pin configurations are known, but their physical QD2 wiring was not independently verified. A later build configured PE2 AF10; this identifies a firmware setting, not the physical route. The all-mode diagnostic is isolated from network initialization. To reproduce the low-speed comparison, set `APP_QSPI_DIAGNOSTIC_ONLY` to `1U` and `W6300_OSPI_CLOCK_MODE` to `HAL_OSPI_CLOCK_MODE_0` in `App/Inc/app_config.h`; keep the normal PLL2R 76 MHz and prescaler 79. The firmware hardware-resets W6300 before each mode and reads raw CIDR 100 times, API CIDR, RTL, VER 100 times, SYSR, HAL status/state/error code, and error count.
 
 | Mode | Opcode / phases / HAL dummy | CIDR raw | API CIDR / RTL | VER | SYSR | HAL status / errors |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -172,9 +173,9 @@ All three modes ran at 0.962025 MHz with Mode 0, no sample shift, DQS/DTR disabl
 
 An exact Golden-clock Quad retry also ran at Mode 0 with D1HCLK 275 MHz, `ClockPrescaler=6`, and 45.833 MHz SCK. The startup identity read returned raw CIDR `0x00`, API CIDR `0x0000`, RTL/VER/SYSR zero, and HAL errors zero. Single fallback at the same SCK read raw CIDR `0x61`, API CIDR `0x6300`, RTL `0x11`, VER `0x4661`, and SYSR `0x01`. Networking was not tested at this temporary 45.833 MHz setting. Its UART log is `/tmp/w6300-ubuntu-golden-quad-uart.log`.
 
-### Historical PE2-matched diagnostic (2026-09-28)
+### Historical PE2-configured diagnostic (2026-09-28)
 
-The user confirmed the physical wire is WIZ630io J3-3/QD2 to PE2. The earlier application had PF7 configured for IO2, so those Quad runs had a pin mismatch. Changed `W6300-TCP-Loopback.ioc` and `HAL_OSPI_MspInit` to PE2 AF10, clean-built the diagnostic firmware (0 errors, 14 warnings from unchanged vendor code), flashed and verified it, then ran the all-mode diagnostic at Mode 0 and 0.962025 MHz.
+This build configured PE2 AF10 for IO2, whereas an earlier source revision configured PF7. The physical QD2 connection during either set of tests was not independently verified. Changed `W6300-TCP-Loopback.ioc` and HAL MSP to PE2 AF10, clean-built the diagnostic firmware (0 errors, 14 warnings from unchanged vendor code), flashed and verified it, then ran the all-mode diagnostic at Mode 0 and 0.962025 MHz.
 
 | Mode | CIDR | API CIDR / RTL | VER | SYSR | HAL errors |
 | --- | --- | --- | --- | --- | --- |
@@ -182,11 +183,11 @@ The user confirmed the physical wire is WIZ630io J3-3/QD2 to PE2. The earlier ap
 | Dual 1-2-2 | `0x61`, 100/100 | `0x6300` / `0x11` | `0x4661`, 100/100 | `0x01` | 0 |
 | Quad 1-4-4 | `0x00`, 0/100 | `0x0000` / `0x00` | `0x0000`, 0/100 | `0x00` | 0 |
 
-SWD readback confirmed PE2 AF10, no pull, very-high speed; PF7 no longer had AF configured. P1CR=`0x02010101` still selects Port 1 LOW. The UART capture is `/tmp/w6300-ubuntu-pe2-single-dual-quad-uart.log`. The user clarified that the resistor on SB67 had already been removed, so SB67 was OFF during this diagnostic and PE2 was selected for QSPI_BK1_IO2. The normal Mode 3 operational firmware was restored and verified afterward; its startup log is `/tmp/w6300-ubuntu-pe2-final-startup-uart.log`.
+SWD readback confirmed the firmware configured PE2 AF10, no pull, very-high speed; PF7 no longer had AF configured. P1CR=`0x02010101` selected Port 1 LOW. The physical PE2 signal route and SB67 resistor state were not independently verified for this run. The UART capture is `/tmp/w6300-ubuntu-pe2-single-dual-quad-uart.log`. The normal Mode 3 operational firmware was restored and verified afterward; its startup log is `/tmp/w6300-ubuntu-pe2-final-startup-uart.log`.
 
 ### Historical Golden Reference timing retest with PE2 (2026-09-28)
 
-After the PE2 pin correction, reran the diagnostic using the Golden Reference timing and critical callback: OCTOSPI kernel source D1HCLK at 275 MHz, Mode 0, no sample shift, `ClockPrescaler=6` (divider 6, 45.833333 MHz SCK), delay block bypassed, DHQC disabled, FIFO threshold 1, hardware NCS, and Golden `__disable_irq()` / `__enable_irq()` critical callbacks. SB67's resistor was already removed, so PE2 was selected for QSPI IO2. The diagnostic reset W6300 before each bus mode and did no network initialization.
+With firmware PE2 AF10 selected, the diagnostic used Golden Reference timing and critical callbacks: OCTOSPI kernel source D1HCLK at 275 MHz, Mode 0, no sample shift, `ClockPrescaler=6` (divider 6, 45.833333 MHz SCK), delay block bypassed, DHQC disabled, FIFO threshold 1, hardware NCS, and Golden `__disable_irq()` / `__enable_irq()` callbacks. The physical PE2 board route and SB67 resistor state were not independently verified. The diagnostic reset W6300 before each bus mode and did no network initialization.
 
 | Mode | CIDR raw | API CIDR / RTL | VER | SYSR | HAL errors |
 | --- | --- | --- | --- | --- | --- |
@@ -200,13 +201,13 @@ The exact Golden timing and IRQ callback therefore did not make Quad identity pa
 
 ### What the PE2-era intermediate result established
 
-Single and Dual success confirmed the QD0/QD1 paths and 1-2-2 transaction during that PE2 wiring stage. The user confirmed SB67 was OFF. The PE2-matched Quad identity diagnostic failed at both 0.962025 MHz and the exact Golden Reference clock of 45.833 MHz, with HAL errors zero. The high-speed rerun also used the Golden `__disable_irq()` / `__enable_irq()` critical callbacks. These conclusions describe the earlier PE2 wiring and were superseded when QD2 was moved to PF7.
+Single and Dual identity succeeded in those diagnostics. The PE2-configured Quad identity diagnostic failed at both 0.962025 MHz and the exact Golden Reference clock of 45.833 MHz, with HAL errors zero. The high-speed rerun also used the Golden `__disable_irq()` / `__enable_irq()` critical callbacks. Because historical physical wiring was not independently verified, these results describe the firmware and timing settings only, not the external QD2 route.
 
-Those PE2-era Quad-only results pointed to QD2/PE2 or QD3/PD13 continuity, or behavior unique to the four-line phase. Current PF7 signal capture guidance follows the newer results below.
+Because the physical QD2 route during these PE2-configured tests is unknown, they do not localize an external data line. They show only that the Quad identity result differed under those firmware/timing configurations. Current PF7 signal capture guidance follows the newer results below.
 
-### PF7 reroute: current Quad read and TCP results (2026-09-28)
+### PF7 results before the ground/timing follow-up (2026-09-28)
 
-The user moved WIZ630io J3-3/QD2 from PE2 to PF7 at NUCLEO CN9-26/D62. The project now configures PF7 AF10 as OCTOSPIM Port 1 IO2. The three data pins are routed through Port 1 LOW (IO0–IO3); live `OCTOSPIM_P1CR=0x02010101` confirms that selection. SB67 is not in this external PF7 signal path. The checked-in `.ioc` and HAL MSP match this wiring.
+The current physical wiring is WIZ630io J3-3/QD2 to PF7 at NUCLEO CN9-26/D62. The project configures PF7 AF10 as OCTOSPIM Port 1 IO2. The four data pins use Port 1 LOW (IO0–IO3); live `OCTOSPIM_P1CR=0x02010101` confirms that selection. SB67 is outside this external PF7 signal path; its resistor state is not known. The checked-in `.ioc` and HAL MSP match the current wiring.
 
 The diagnostic used Golden transaction semantics at low speed: Mode 0, no sample shift, PLL2R 76 MHz / prescaler 79 = 0.962025 MHz SCK, hardware NCS, STR, DQS/DTR off, instruction width 1, address/data width 4 in Quad, 16-bit address, opcode mode bits `0x80`, and two HAL dummy cycles (8 dummy bits). Firmware reset W6300 before each mode and performed no network setup in the identity comparison.
 
@@ -224,13 +225,64 @@ With `APP_QSPI_BUFFER_DIAGNOSTIC=1`, Single and Dual TX-buffer read/write compar
 - Quad write followed by Single read passed all 16 bytes in the baseline no-op critical-callback build.
 - Matching the Golden IRQ-masking callbacks did not fix Quad reads; in that run the Quad-write/Single-read comparison instead mismatched at indices 5–7. Half-cycle sample shift did not improve the Quad read. Mode 3 preserved identity reads but also left the Quad read failure; its write-direction comparison mismatched at indices 5–7. Each comparison changed only the named callback, sample shift, or clock mode.
 
-The normal firmware was restored with `APP_QSPI_DIAGNOSTIC_ONLY=0`, `APP_QSPI_BUFFER_DIAGNOSTIC=0`, `W6300_GOLDEN_CRITICAL_CALLBACKS=0`, Mode 0/no sample shift, and 0.962025 MHz SCK. It was clean-built, flashed, verified, and reset. UART reported Quad identity passed, communication sanity passed, W6300 initialization, PHY link UP, and TCP LISTEN on port 5000. `getnetinfo()` readback printed subnet `255.255.240.12` although the configured value is `255.255.255.0`; this is consistent with the observed Quad read-data corruption and needs confirmation after the receive path is fixed. Ping passed 3/3 and ARP resolved the W6300 MAC as REACHABLE. Python TCP test passed the 1-byte payload, then failed at 64 bytes, offset 15 (`sent 0xB0`, `received 0x44`). The default matrix stopped there, and the 64-byte x 1000-connection test was not run. The final startup capture is `/tmp/w6300-ubuntu-pf7-final-normal-uart.log` and the TCP result came from `tools/tcp_loopback_test.py --host 192.168.0.10 --source 192.168.0.20`.
+The normal firmware was restored with `APP_QSPI_DIAGNOSTIC_ONLY=0`, `APP_QSPI_BUFFER_DIAGNOSTIC=0`, `W6300_GOLDEN_CRITICAL_CALLBACKS=0`, Mode 0/no sample shift, and 0.962025 MHz SCK. It was clean-built, flashed, verified, and reset. UART reported Quad identity passed, communication sanity passed, W6300 initialization, PHY link UP, and TCP LISTEN on port 5000. `getnetinfo()` readback printed subnet `255.255.240.12` although the configured value is `255.255.255.0`, consistent with the Quad read-data corruption measured at that time. Ping passed 3/3 and ARP resolved the W6300 MAC as REACHABLE. Python TCP test passed the 1-byte payload, then failed at 64 bytes, offset 15 (`sent 0xB0`, `received 0x44`). The default matrix stopped there, and the 64-byte x 1000-connection test was not run. This is the pre-follow-up result; the 2026-09-29 J3 GND and CS-high-time result appears below. The startup capture is `/tmp/w6300-ubuntu-pf7-final-normal-uart.log` and the TCP result came from `tools/tcp_loopback_test.py --host 192.168.0.10 --source 192.168.0.20`.
 
-### Current fault boundary and next physical measurement
+### DeviceSize and OCTOSPI kernel A/B tests (2026-09-28)
 
-Known working on the current PF7 setup: W6300 reset, Single and Dual identity, Quad CIDR/VER/SYSR identity, the OCTOSPIM Port 1 LOW mapping, HAL transaction completion (zero errors), Ethernet PHY link, ARP/ping, and TCP connection establishment. Historical Windows Single-fallback TCP echo remains fully successful. The unresolved boundary is Quad receive payload data from W6300 to STM32; the data corruption can still come from QD0–QD3 electrical signals or OCTOSPI sampling/input handling, so software evidence alone cannot identify the exact line.
+The current source/default settings were restored to the baseline after these tests. Each A/B build changed only the named setting; all used Mode 0, no sample shift, PF7/Port 1 LOW, the Golden 1-4-4 transaction format, hardware NCS, 8 dummy bits (2 HAL cycles), and approximately 1 MHz SCK. Each diagnostic clean-built, programmed, verified, and reset successfully. Both clean builds finished with zero errors and the same 14 warnings in unchanged vendor `Application/loopback/loopback.c`.
 
-For the next hardware measurement, use a 3.3 V-compatible logic analyzer or oscilloscope with the grounds connected. Capture both the WIZ630io J3 end and the NUCLEO end during a low-speed Quad receive. Probe SCK at J3-6/PB2 (CN10-15/D27), NCS at J3-7/PG6 (CN10-13/D26), and QD0–QD3 at J3-1..4 and their MCU endpoints PD11 (CN10-23/D30), PD12 (CN10-21/D29), PF7 (CN9-26/D62), PD13 (CN10-19/D28). For a CIDR read, expect NCS low, about 0.962 MHz SCK, 1-line opcode `0x80`, four-line address, two dummy clocks, then data `0x61` as nibbles `0x6` followed by `0x1` on QD3..QD0. For the buffer pattern read, the first bytes are `0x00`, then `0xFF`: the four data lines should be low for both nibbles of `0x00`, then high for both nibbles of `0xFF`. Compare the waveform at J3 and at the MCU connector. If they differ, inspect that wire/connection; if they match through the MCU pin while HAL returns different bytes, the evidence shifts to STM32 input sampling/routing. With power off, also check J3-3 to PF7 continuity, J3-4 to PD13, and shorts between data lines or to GND/3V3.
+| Test | DeviceSize | Kernel clock | SCK | Single identity | Dual identity | Quad identity | Quad payload |
+| --- | ---: | --- | ---: | --- | --- | --- | --- |
+| Baseline | 17 | PLL2R 76 MHz | 0.962025 MHz | 100/100 | 100/100 | 100/100 | lengths 1, 2, 3, 4, 7 pass; 8 fails at offset 4 (`0x0F`→`0x03`) |
+| A | 32 | PLL2R 76 MHz | 0.962025 MHz | 100/100 | 100/100 | 100/100 | same length-8 failure and offset/value |
+| B | 32 | D1HCLK 275 MHz | 1.074218 MHz | 100/100 | 100/100 | 100/100 | same length-8 failure and offset/value |
+
+For every mode in A and B, raw CIDR was `0x61` for 100/100 reads, API CIDR `0x6300`, RTL `0x11`, VER `0x4661` for 100/100 reads, SYSR `0x01`, and HAL OSPI error count 0. Single and Dual TX-buffer read/write tests passed at all lengths in the earlier matrix (1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, 256). The A/B Quad matrix again passed 1, 2, 3, 4, and 7 bytes and failed at 8 bytes, offset 4, expected `0x0F`, actual `0x03`.
+
+The direction test remained asymmetric in both A and B: Single write → Quad read failed, including one-byte and at-most-7-byte chunks; Quad write → Single read passed the 16-byte test in these two builds. This is evidence that Quad receive is the more reproducible failure direction, not proof that Quad transmit is always correct; other recorded configurations had partial Quad-write mismatches. TCP was not retested because neither A nor B improved payload reads.
+
+Test B used `ClockPrescaler=256`, the HAL maximum divider. SWD HOTPLUG readback confirmed the selected source and register settings: `RCC_D1CCIPR=0x00000000` (D1HCLK), `OCTOSPI1_DCR1=0x001F0008` (DeviceSize 32), `DCR2=0x000000FF` (divider 256), and `DCR3=0`. UART reported the integer effective SCK as 1,074,218 Hz. The A log is `/tmp/w6300-device-size-32-pll2-76-uart.log`; the B log is `/tmp/w6300-device-size-32-d1hclk-275-uart.log`.
+
+Neither tested difference changed the Quad payload result. DeviceSize and kernel source are therefore not supported as the cause of this corruption under the tested low-speed conditions. After the repeat-read capture build below, the project was restored to `DeviceSize=17`, PLL2R 76 MHz, prescaler 79 (0.962025 MHz), and all diagnostic options off. That normal build was clean-built, flashed, verified, and reset; the clean UART startup capture is `/tmp/w6300-final-normal-uart-clean.log`.
+
+### Earlier 16-byte repeated-read capture
+
+An earlier repeat diagnostic wrote `00 FF 55 AA 0F F0 33 CC 11 22 44 88 7F FE A5 5A` in Single mode and read 16 bytes in Quad every 50 ms. It ran with DeviceSize 32 and D1HCLK 275 MHz divided by 256 (`~1.074 MHz` SCK). The reads failed with HAL errors 0; one captured result was `FFFFFFFFFFFFFFFFFFFF000000000000`, first mismatch at offset 0 (`expected 0x00`, `actual 0xFF`). UART capture: `/tmp/w6300-quad-repeat-read-uart.log`.
+
+### Two-channel scope capture and bytewise replay (2026-09-29)
+
+The user-provided NCS/CLK capture shows two separate NCS-low sections with 16 SCK pulses in each. At the configured 1-4-4 protocol, a one-byte transaction is 8 instruction clocks + 4 address clocks + 2 dummy clocks + 2 data clocks = 16 SCK pulses. The capture therefore shows two one-byte transactions; it does not require looking for a slower, separate waveform.
+
+The current isolated replay writes and verifies this pattern using Single mode, then repeats two one-byte Quad reads per loop: TX offset `0x7000` expects `0x00`, followed by offset `0x7100` expecting `0xFF`. The loop repeats every 2 ms at the restored baseline settings: DeviceSize 17, PLL2R 76 MHz / prescaler 79, effective SCK 0.962025 MHz. Clean build, flash, verify, and reset succeeded. The startup Single-mode readback matched all 16 bytes. The first 3,000 Quad pairs reported byte 0 as `0xFF` instead of `0x00`, byte 1 as `0xFF` as expected, and HAL errors 0. UART capture: `/tmp/w6300-quad-bytewise-pair-2ms-uart.log`.
+
+This paired replay differs from the earlier direction test, which recorded byte 0 correct and byte 1 as `0xF5` instead of `0xFF`. The returned value therefore varies with the tested address/sequence; it does not support assigning the fault to one data pin yet.
+
+The J3-side QD3/CLK capture and a sequential capture at the MCU end (PD13/CN10-19 with CLK at PB2/CN10-15) looked similar. The user's later captures showed that touching the J1 CS contact could change the displayed edge shape. The user then connected WIZ630io J3-5 GND to NUCLEO GND in addition to the existing J2 GND; the waveform became visibly cleaner. This is direct evidence that the measurement/reference return setup affected the observed trace. It did not, by itself, make the original-order bytewise replay pass.
+
+After adding J3 GND, the unchanged replay (read `0x7000` = `0x00`, then `0x7100` = `0xFF`, no inter-read delay) still failed: summaries at 227,000–230,000 pairs showed the first byte correct and the second byte `0x00`, HAL errors 0. Log: `/tmp/w6300-j3-gnd-quad-read-uart.log`. Two controlled sequence checks then showed the failure depended on transaction order and spacing:
+
+- Reversing the reads (`0x7100`=`0xFF` first, then `0x7000`=`0x00`), with no gap, passed through 9,000 pairs, bad=0, HAL errors=0. Log: `/tmp/w6300-j3-gnd-reverse-order-uart.log`.
+- Keeping the original order and inserting a 1 ms gap passed through 5,000 pairs, bad=0, HAL errors=0. Log: `/tmp/w6300-j3-gnd-interread-gap-uart-saved.log`.
+
+The decisive no-gap check kept the original order and changed only OCTOSPI `ChipSelectHighTime` from 1 to 2 cycles in `main.c` and the `.ioc`; J3 GND remained connected. At baseline `DeviceSize=17`, PLL2R 76 MHz / prescaler 79, the effective SCK remained 0.962025 MHz. The replay passed through 11,000 pairs, bad=0, HAL errors=0 (`/tmp/w6300-j3-gnd-csht2-pair-uart.log`). This supports insufficient intertransaction CS-high time as a software timing contributor under the tested setup. Because the added J3 return and CS-high-time change are both part of the final successful setup, their separate contributions are not fully quantified.
+
+With `APP_QSPI_DIAGNOSTIC_ONLY=1` and `APP_QSPI_BUFFER_DIAGNOSTIC=1`, Single 1-1-1, Dual 1-2-2, and Quad 1-4-4 each passed identity reads (CIDR raw `0x61` 100/100, normalized `0x6100`, API `0x6300`, RTL `0x11`; VER `0x4661` 100/100; SYSR `0x01`; HAL errors 0). Each mode passed TX-buffer read/write lengths 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, and 256 bytes. Quad also passed Single-write → Quad-read, Quad-read chunks up to 7 bytes, bytewise Quad reads, and Quad-write → Single-read (16 bytes each). Capture: `/tmp/w6300-j3-gnd-csht2-buffer-matrix-uart.log`.
+
+The normal firmware was restored and clean-built, flashed, verified, and reset with `APP_QSPI_DIAGNOSTIC_ONLY=0`, `APP_QSPI_BUFFER_DIAGNOSTIC=0`, `APP_QSPI_REPEAT_READ_DIAGNOSTIC=0`, `DeviceSize=17`, and `ChipSelectHighTime=2`. UART confirmed Quad identity (`CIDR 0x61`, `VER 0x4661`, `SYSR 0x01`, HAL errors 0) and TCP LISTEN on port 5000. The initial UART sample showed PHY link DOWN, but host network checks after startup succeeded: the ASIX interface `enx04ab18c5869b` had `192.168.0.20/24`; ping to `192.168.0.10` passed 3/3; `ip neigh` resolved `02:00:00:00:00:10` (state STALE at final query). The Python echo matrix passed 1, 64, 512, 1460, 2048, 4096, 16384, and 65536 bytes (90,101 bytes total). A 64-byte x 1000 fresh-connection run passed all 64,000 bytes with no mismatch; the first run reported 1,922 connection retries during server close/relisten intervals. SCK remained 0.962025 MHz. Normal startup capture: `/tmp/w6300-j3-gnd-interread-gap-uart.log`.
+
+At the user's request to focus on TCP, both tests were rerun on the same normal Quad firmware. The 8-size echo matrix again passed all 90,101 bytes. The 64-byte x 1000 test again echoed all 64,000 bytes correctly and exited successfully; it counted 1,864 refused-connect retries, with 25.270 ms average per completed connection. The client retries `ECONNREFUSED` for up to 250 ms while the single W6300 server socket returns to LISTEN after the prior client closes. This is a brief reconnect availability gap, not an echo mismatch or disconnect; current evidence does not show TCP payload corruption.
+
+### Revalidation after moving the power connection point (2026-09-29)
+
+After the user changed the power connection point, the QSPI and network checks were repeated. The exact replacement connector/pin was not specified, so this record does not infer it. ST-LINK detected the NUCLEO-H723ZG at 3.25 V. The test retained DeviceSize 17, PLL2R 76 MHz / prescaler 79 (0.962025 MHz SCK), Mode 0, no sample shift, and ChipSelectHighTime 2.
+
+The diagnostic build passed Single, Dual, and Quad identity reads at 100/100 each (raw CIDR `0x61`, API CIDR `0x6300`, RTL `0x11`, VER `0x4661`, SYSR `0x01`, HAL errors 0). All three modes passed TX-buffer read/write lengths 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, and 256 bytes. Quad direction checks (Single write → Quad read, chunked Quad read, bytewise Quad read, and Quad write → Single read) all passed. UART capture: `/tmp/w6300-power-point-qspi-diagnostic-uart.log`.
+
+The normal Quad firmware was then clean-built, flashed, verified, and reset with all diagnostic options off. UART reported Quad identity passed with HAL errors 0, TCP LISTEN on port 5000, and PHY transitioned from DOWN to UP. Ping on `enx04ab18c5869b` passed 3/3. The Python TCP matrix passed 1, 64, 512, 1460, 2048, 4096, 16384, and 65536 bytes (90,101 total); 64-byte x 1000 fresh connections passed all 64,000 bytes with no payload mismatch. The latter run counted 1,797 refused-connect retries while the W6300's single server socket returned to LISTEN; average completed-connection time was 25.418 ms. UART capture: `/tmp/w6300-power-point-normal-uart.log`.
+
+### Current result and fault boundary
+
+At the tested low-speed setup—J3 GND connected in addition to J2 GND, `ChipSelectHighTime=2`, Mode 0/no sample shift, 0.962025 MHz—the Quad receive payload corruption is no longer reproduced. All mode buffer checks and the normal Quad TCP tests passed. The earlier `DeviceSize=32` and D1HCLK A/B tests did not improve reads before the return-path/timing setup was corrected; they are not implicated by the present successful baseline and were not retained. The strongest current inference is that the combination of local signal return grounding and minimum CS-high time resolved the observed corruption; available tests do not isolate their independent contributions or prove which margin was most responsible. No new per-data-line fault diagnosis is indicated by the current software results.
 
 ## Troubleshooting
 
@@ -240,6 +292,6 @@ For the next hardware measurement, use a 3.3 V-compatible logic analyzer or osci
 | `/dev/ttyACM*` is missing | Check `lsusb`, `udevadm info --query=all --name=<device>`, `/dev/serial/by-id/`, and the latest kernel messages if permitted. Device numbers can change. |
 | Ping fails | Confirm only the WIZ630io adapter has `192.168.0.20/24`, UART reports PHY link UP, and `ip neigh` resolves the W6300 MAC. |
 | TCP connection is refused | Check UART for TCP LISTEN on port 5000. The client retries the brief socket close/reopen gap; persistent refusal means the firmware is not listening or the wrong interface/address was selected. |
-| Quad identity works but payload bytes mismatch | Current PF7 firmware reads CIDR/VER correctly, but TX-buffer and TCP payload reads mismatch. Capture W6300-driven QD0–QD3 at both J3 and the MCU endpoints as described above; SB67 is outside the PF7 path. |
+| Quad identity works but payload bytes mismatch | First confirm J3-5 GND is connected to NUCLEO GND in addition to J2 GND and `ChipSelectHighTime=2` is present in both `main.c` and the `.ioc`. Those exact settings passed the buffer matrix and TCP tests. SB67 is outside the current PF7 signal path; its resistor state has not been verified. |
 
 The Windows record remains in [FIRMWARE.md](FIRMWARE.md) and [WINDOWS_TEST.md](WINDOWS_TEST.md). This Ubuntu report adds the Dual result and does not replace the Windows measurements.

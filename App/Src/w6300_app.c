@@ -145,6 +145,76 @@ bool w6300_app_run_qspi_diagnostic(void)
   return all_modes_passed;
 }
 
+#if APP_QSPI_REPEAT_READ_DIAGNOSTIC
+void w6300_app_run_repeated_quad_read_diagnostic(void)
+{
+  static const uint8_t pattern[] = {
+      0x00U, 0xFFU, 0x55U, 0xAAU, 0x0FU, 0xF0U, 0x33U, 0xCCU,
+      0x11U, 0x22U, 0x44U, 0x88U, 0x7FU, 0xFEU, 0xA5U, 0x5AU};
+  uint8_t actual[2] = {0U, 0U};
+  uint8_t single_readback[sizeof(pattern)];
+  const uint32_t addr_sel = (0x7000UL << 8U) | WIZCHIP_TXBUF_BLOCK(0U);
+  const uint32_t second_byte_addr = addr_sel + (1UL << 8U);
+  W6300_PortDiagnostics diagnostics = {0U, 0U, 0U, 0U};
+  uint32_t read_count = 0U;
+  uint32_t bad_read_count = 0U;
+  int8_t init_result;
+
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_SINGLE);
+  w6300_port_reset();
+  w6300_port_clear_diagnostics();
+  w6300_port_register_callbacks();
+  init_result = wizchip_init(tx_buffer_sizes, rx_buffer_sizes);
+  if (init_result != 0) {
+    printf("[QSPI-LA] Single-mode wizchip_init failed: %d\r\n", init_result);
+    return;
+  }
+
+  WIZCHIP_WRITE_BUF(addr_sel, (uint8_t *)pattern, sizeof(pattern));
+  memset(single_readback, 0x00, sizeof(single_readback));
+  WIZCHIP_READ_BUF(addr_sel, single_readback, sizeof(pattern));
+  for (uint16_t index = 0U; index < sizeof(pattern); ++index) {
+    if (single_readback[index] != pattern[index]) {
+      printf("[QSPI-LA] Single-mode pattern verification failed at %u: "
+             "expected=0x%02X actual=0x%02X\r\n",
+             (unsigned int)index, pattern[index], single_readback[index]);
+      return;
+    }
+  }
+  printf("[QSPI-LA] Single-mode pattern verification PASS "
+         "addr=0x7000 data=00FF55AA0FF033CC112244887FFEA55A\r\n");
+
+  w6300_port_set_qspi_mode(W6300_QSPI_BUS_QUAD);
+  w6300_port_register_callbacks();
+  w6300_port_clear_diagnostics();
+  printf("[QSPI-LA] repeating Quad reads TX offsets 0x7000/0x7100 "
+         "expected=0x00/0xFF every %u ms; UART summary every 1000 pairs\r\n",
+         APP_QSPI_REPEAT_READ_INTERVAL_MS);
+
+  for (;;) {
+    WIZCHIP_READ_BUF(addr_sel, &actual[0], 1U);
+    WIZCHIP_READ_BUF(second_byte_addr, &actual[1], 1U);
+    ++read_count;
+    if ((actual[0] != pattern[0]) || (actual[1] != pattern[1])) {
+      ++bad_read_count;
+    }
+
+    if ((read_count % 1000U) == 0U) {
+      w6300_port_get_diagnostics(&diagnostics);
+      printf("[QSPI-LA] pairs=%lu bad=%lu result=%s "
+             "first=0x%02X/0x%02X second=0x%02X/0x%02X HAL-errors=%lu\r\n",
+             (unsigned long)read_count, (unsigned long)bad_read_count,
+             ((actual[0] == pattern[0]) && (actual[1] == pattern[1]))
+                 ? "PASS"
+                 : "FAIL",
+             pattern[0], actual[0], pattern[1], actual[1],
+             (unsigned long)diagnostics.hal_error_count);
+    }
+    HAL_Delay(APP_QSPI_REPEAT_READ_INTERVAL_MS);
+  }
+}
+#endif
+
 bool w6300_app_init(void)
 {
   const uint8_t expected_mac[6] = APP_MAC_ADDRESS;
